@@ -74,11 +74,11 @@
     Cédric Guévremont \\
     Matricule : 20266532 \\
     \texttt{cedric.guevremont@umontreal.ca}
-    \AND
+    \And
     Rima Boujenane \\
      Matricule : 20235550 \\
     \texttt{rima.boujenane@umontreal.ca}
-    \AND
+    \And
     Abdelghafour Rahmouni \\
     Matricule : 20246224 \\
     \texttt{abdel.ghafour.rahmouni@umontreal.ca}
@@ -92,6 +92,48 @@
 
 
 \section{Description du projet}
+    \subsection{Contexte}
+        Dans ce projet, on considère un agent d’apprentissage automatique chargé de gérer un portefeuille composé d’un ensemble
+        limité d’actifs financiers et un capital de départ. À chaque pas de temps, l’agent observe l’état du marché à partir de données historiques
+        (rendements, volatilité, indicateurs techniques) et peut effectuer des actions élémentaires sur ces actifs : acheter,
+        vendre ou conserver. Ces actions modifient l’allocation du portefeuille et génèrent une récompense dépendant de
+        la performance et du risque.\\
+        Ce cadre s’inscrit dans une approche d’apprentissage par renforcement orientée vers une gestion responsable
+        du risque, visant à limiter les comportements spéculatifs excessifs, à favoriser des stratégies d’investissement stables
+        à long terme, dans une perspective d'usage responsable des méthodes d’apprentissage automatique.
 
+    \subsection{Objectifs}
+        L’objectif de ce projet est d’expérimenter l’usage de réseaux récurrents (RNN/LSTM) combiné à l’apprentissage par
+        renforcement, afin d’évaluer dans quelle mesure ces approches permettent de réduire le risque global d’un portefeuille
+        financier dans un contexte de prise de décision séquentielle.\\\\
+        Plus largement, ce travail ouvre la possibilité d’examiner la transférabilité du cadre proposé à d’autres domaines
+        reposant sur des séries temporelles et des décisions séquentielles, tels que l’énergie, la logistique ou la gestion
+        de ressources.\\\\
+        Dans cette perspective, le projet considère notamment comme axes d’exploration la minimisation de la volatilité du
+        portefeuille sur l’horizon d’investissement, la réduction des pertes maximales lors des phases
+        de stress du marché, l’apprentissage de décisions d’achat, de vente et de conservation cohérentes dans le temps,
+        limitant les réallocations excessives, ainsi que l’analyse de l’influence de fonctions de récompense orientées vers
+        le contrôle du risque et la stabilité sur les politiques d’allocation apprises.
 
+    \subsection{Méthodes prévues}
+        \begin{itemize}
+            \item \textbf{Observations} : Fenêtres temporelles de données financières historiques (rendements, volatilité,
+                indicateurs techniques) extraites via l’API de Yahoo Finance.
+
+            \item \textbf{Modélisation} : Encodeur d’état basé sur des réseaux récurrents de type LSTM, couplé à un agent
+                d’apprentissage par renforcement profond de type Actor-Critic (PPO ou DDPG).
+
+            \item \textbf{Fonction de récompense} : Combinaison du rendement du portefeuille et de pénalités liées au risque
+                (volatilité) et aux réallocations excessives.
+
+            \item \textbf{Évaluation} : Backtesting temporel avec comparaison à un indice de référence tel que le S\&P 500.
+
+        \end{itemize}
+    \subsection{Résultats prévus}
+        Les résultats attendus incluent l’obtention d’un rendement global positif sur l’horizon de test, indiquant que
+        l’agent apprend une stratégie de gestion effective plutôt qu’un comportement trivial. On s’attend également à
+        ce que la politique apprise produise un rendement relativement stable, caractérisé par une volatilité maîtrisée
+        et des pertes limitées lors des périodes de stress. Les performances devraient se situer à un niveau comparable
+        à celui du marché, tel que le S\&P 500, tout en offrant un meilleur contrôle du risque, et montrer que l’agent a
+        effectivement appris une stratégie d’allocation cohérente plutôt que de simplement rester inactif.
 \end{document}

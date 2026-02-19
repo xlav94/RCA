@@ -13,7 +13,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
         if "market_history" not in observation_space.spaces:
             raise ValueError("The observation space is missing 'market_history' field")
-        if "porfolio_state" not in observation_space.spaces:
+        if "portfolio_state" not in observation_space.spaces:
             raise ValueError("The observation space is missing 'portfolio_state' field")
         if "balance" not in observation_space.spaces:
             raise ValueError("The observation space is missing 'balance' field")
@@ -51,4 +51,4 @@ policy_kwargs = dict(
                                    batch_first=True)
 )
 
-model = PPO("MultiInputPolicy", env, policy_kwargs=policy_kwargs, verbose=1)
+#model = PPO("MultiInputPolicy", "TODO env", policy_kwargs=policy_kwargs, verbose=1)

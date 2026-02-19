@@ -53,6 +53,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
 
 
+
 policy_kwargs = dict(
     features_extractor_class=CustomCombinedExtractor,
     features_extractor_kwargs=dict(observation_space = None,
@@ -61,4 +62,14 @@ policy_kwargs = dict(
                                    batch_first = True)
 )
 
-#model = PPO("MultiInputPolicy", "TODO env", policy_kwargs=policy_kwargs, verbose=1)
+model = PPO("MultiInputPolicy", "TODO env",
+            #learning_rate=,
+            #n_steps=1,
+            #batch_size=,
+            #n_epochs=,
+            policy_kwargs=policy_kwargs,
+            verbose=1)
+
+model.learn(progress_bar=True,
+            #total_timesteps=
+            )

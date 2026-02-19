@@ -4,13 +4,16 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from gymnasium import spaces
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: spaces.Dict,
+    def __init__(self,
+                observation_space: spaces.Dict = None,
                 hidden_size_lstm=168,
                 num_layers_lstm=2,
                 batch_first=True):
 
         super().__init__(observation_space, features_dim=1)
 
+        if observation_space is None:
+            raise ValueError("Observation space cannot be None")
         if "market_history" not in observation_space.spaces:
             raise ValueError("The observation space is missing 'market_history' field")
         if "portfolio_state" not in observation_space.spaces:
@@ -35,6 +38,13 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         self._features_dim = hidden_size_lstm + portfolio_state_shape + balance_shape
 
     def forward(self, observations) -> torch.Tensor:
+        if "market_history" not in observations:
+            raise ValueError("The observation space is missing 'market_history' field")
+        if "portfolio_state" not in observations:
+            raise ValueError("The observation space is missing 'portfolio_state' field")
+        if "balance" not in observations:
+            raise ValueError("The observation space is missing 'balance' field")
+
         out, (h_c, c_n) = self.lstm(observations['market_history'])
         out_portfolio_state = self.relu(self.mlp_portfolio(observations['portfolio_state'])) # shape(
         balance = observations['balance'].view(-1, 1)
@@ -45,10 +55,10 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
 policy_kwargs = dict(
     features_extractor_class=CustomCombinedExtractor,
-    features_extractor_kwargs=dict(hidden_size=168,
-                                   num_layers=2,
-                                   input_size=1,
-                                   batch_first=True)
+    features_extractor_kwargs=dict(observation_space = None,
+                                   hidden_size = 168,
+                                   num_layers_lstm = 2,
+                                   batch_first = True)
 )
 
 #model = PPO("MultiInputPolicy", "TODO env", policy_kwargs=policy_kwargs, verbose=1)

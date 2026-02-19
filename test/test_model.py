@@ -18,7 +18,8 @@ class TestCustomCombinedExtractor(unittest.TestCase):
         })
 
     def test_forward_pass(self):
-        extractor = CustomCombinedExtractor(self.observation_space, hidden_size_lstm=self.hidden_size)
+        extractor = CustomCombinedExtractor(observation_space=self.observation_space,
+                                            hidden_size_lstm=self.hidden_size)
 
         observations = {
             'market_history': torch.rand(self.batch_size, 10, 5),

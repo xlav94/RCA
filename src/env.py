@@ -1,10 +1,11 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from scipy.special import softmax
 
-
-class RCAEnv(gym.Env):
+class CustomEnv(gym.Env):
     def __init__(self, df, window_size=50, initial_balance=10000, env_name='RCA'):
+        self.stocks = []
         self.weights = None
         self.balance = None
         self.current_step = None
@@ -38,10 +39,10 @@ class RCAEnv(gym.Env):
             ),
             "portfolio_state": spaces.Box(
                 low=0, high=1,
-                shape=(window_size,self.nb_actifs),  # Weights for Assets
+                shape=(self.nb_actifs,),  # Weights for Assets
                 dtype=np.float32
             ),
-            "balance": spaces.Box(low=0, high=np.inf, shape=(window_size,), dtype=np.float32)
+            "balance": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         })
 
     def _get_observation(self):
@@ -63,11 +64,38 @@ class RCAEnv(gym.Env):
 
         return self._get_observation(), {}
 
-    def step(self, action):
+    def step(self, action : np.ndarray):
+        portfolio_weights = self._get_weights_from_action(action)
+
+        reward = self._calculate_reward(portfolio_weights)
+        self._adjust_portofolio_weights(portfolio_weights)
+
+        observation = self._get_observation()
+
+        #TODO
+        terminated = None
+        truncated = None
+        info = {
+            "Portfolio_Weights": portfolio_weights,
+        }
+
+        return observation, reward, terminated, truncated, info
+
+    def _get_weights_from_action(self, action, precision=2):
+        weights =  softmax(action)
+        rounded_weights = np.round(weights, decimals=precision)
+        diff = 1 - np.sum(rounded_weights)
+        rounded_weights[rounded_weights.argmax()] += diff
+        return rounded_weights
+
+    def _calculate_reward(self, portfolio_weights):
+        #TODO
         return
 
-    def _calculate_reward(self, portfolio_return, weight_change, net_worth):
-        return
+    def _adjust_portofolio_weights(self, weights):
+        #for i, stock in enumerate(self.stocks):
+
+        pass
 
     def render(self):
         return

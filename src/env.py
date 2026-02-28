@@ -4,30 +4,20 @@ import numpy as np
 from scipy.special import softmax
 
 class CustomEnv(gym.Env):
-    def __init__(self, df, window_size=50, initial_balance=10000, env_name='RCA'):
-        self.stocks = []
-        self.weights = None
-        self.balance = None
-        self.current_step = None
+    def __init__(self, df, stocks, window_size=50, initial_balance=10000, env_name='RCA'):
+        self.stocks = stocks
+        self.current_step = window_size
         self.df = df
         self.window_size = window_size
         self.initial_balance = float(initial_balance)
         self.env_name = env_name
+        self.num_assets = len(stocks)
+        self.weights = np.zeros(self.num_assets, dtype=np.float32)
 
-        self.stocks = df.columns.tolist()
-        self.nb_stocks = len(self.stocks)
-
-
-        # [-1, 1] for each asset:
-        #       -1 = sell all
-        #       -1 < x < -0.1 = sell
-        #       -0.1 < x < 0.1 = hold
-        #        0.1 < x < 1 = buy
-        #        1 = buy with all available balance
         self.action_space = spaces.Box(low=-1.0,
-                                       high=1.0,
-                                       shape=(self.nb_stocks,),
-                                      dtype=np.float32)
+                                     high=1.0,
+                                     shape=(self.num_assets,),
+                                    dtype=np.float32)
 
         # Observation: A window of technical indicators
         self.observation_space = spaces.Dict({
@@ -38,10 +28,10 @@ class CustomEnv(gym.Env):
             ),
             "portfolio_state": spaces.Box(
                 low=0, high=1,
-                shape=(self.nb_stocks,),  # Weights for Assets
+                shape=(self.num_assets,),  # Weights for Assets
                 dtype=np.float32
             ),
-            "balance": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
+            #"balance": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         })
 
     def _get_observation(self) -> dict:
@@ -51,33 +41,27 @@ class CustomEnv(gym.Env):
         return {
             "market_history": history_window.astype(np.float32),
             "portfolio_state": self.weights.astype(np.float32),
-            "balance": np.array([self.balance], dtype=np.float32)
+            #"balance": np.array([self.balance], dtype=np.float32)
         }
 
     def reset(self, seed=None, options=None) -> tuple[dict, dict]:
         super().reset(seed=seed)
         self.current_step = self.window_size
-        self.balance = self.initial_balance
-        self.weights = np.zeros(self.nb_stocks, dtype=np.float32)  # Start with 0% in assets (all cash)
-        self.max_net_worth = self.initial_balance
+        self.weights = np.zeros(self.num_assets, dtype=np.float32)  # Start with 0% in assets (all cash)
 
         return self._get_observation(), {}
 
     def step(self, action : np.ndarray):
         portfolio_weights = self._get_weights_from_action(action)
-
         reward = self._calculate_reward(portfolio_weights)
-        self._adjust_portofolio_weights(portfolio_weights)
-
         observation = self._get_observation()
-
-        #TODO
-        terminated = None
-        truncated = None
+        terminated = self.current_step >= len(self.df) - 1
+        truncated = False
         info = {
-            "Portfolio_Weights": portfolio_weights,
+            "portfolio_weights": portfolio_weights,
+            "reward": reward,
         }
-
+        self.current_step += 1
         return observation, reward, terminated, truncated, info
 
     def _get_weights_from_action(self, action, precision=2):
@@ -88,11 +72,12 @@ class CustomEnv(gym.Env):
         return rounded_weights
 
     def _calculate_reward(self, portfolio_weights):
-        #TODO
-        return
-
-    def _calculate_reward(self, portfolio_return, weight_change, net_worth):
-        return
+        # On calcule le rendement quotidien du portefeuille en utilisant les poids et les rendements des actifs
+        current_prices = self.df.iloc[self.current_step].values
+        previous_prices = self.df.iloc[self.current_step - 1].values
+        asset_returns = (current_prices - previous_prices) / previous_prices
+        portfolio_return = np.dot(portfolio_weights, asset_returns)
+        return portfolio_return
 
     def render(self):
         return

@@ -14,7 +14,7 @@ class TestCustomCombinedExtractor(unittest.TestCase):
         self.observation_space = spaces.Dict({
             'market_history': spaces.Box(low=0, high=1, shape=(10, 5), dtype=np.float32),
             'portfolio_state': spaces.Box(low=0, high=1, shape=(3,), dtype=np.float32),
-            'balance': spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+            #'balance': spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         })
 
     def test_forward_pass(self):
@@ -24,12 +24,12 @@ class TestCustomCombinedExtractor(unittest.TestCase):
         observations = {
             'market_history': torch.rand(self.batch_size, 10, 5),
             'portfolio_state': torch.rand(self.batch_size, 3),
-            'balance': torch.rand(self.batch_size, 1)
+            #'balance': torch.rand(self.batch_size, 1)
         }
 
         features = extractor(observations)
 
-        expected_features_dim  = self.hidden_size + self.n_assets + 1
+        expected_features_dim  = self.hidden_size + self.n_assets
 
         # Check dimensions of the output features
         self.assertEqual(features.shape[1], expected_features_dim)

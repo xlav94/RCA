@@ -1,7 +1,9 @@
+import pandas as pd
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from gymnasium import spaces
+from src.env import CustomEnv
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
     def __init__(self,
@@ -18,8 +20,8 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
             raise ValueError("The observation space is missing 'market_history' field")
         if "portfolio_state" not in observation_space.spaces:
             raise ValueError("The observation space is missing 'portfolio_state' field")
-        if "balance" not in observation_space.spaces:
-            raise ValueError("The observation space is missing 'balance' field")
+        #if "balance" not in observation_space.spaces:
+            #raise ValueError("The observation space is missing 'balance' field")
 
         # LSTM to extract features from the market history
         market_history_shape = observation_space.spaces['market_history'].shape[1]
@@ -32,44 +34,46 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         self.relu = torch.nn.ReLU()
 
         # The balance is a single scalar value, so we can directly use it without additional processing
-        balance_shape = observation_space.spaces['balance'].shape[0]
+        #balance_shape = observation_space.spaces['balance'].shape[0]
 
         # Update the features dimension to reflect the combined output of the LSTM and MLP
-        self._features_dim = hidden_size_lstm + portfolio_state_shape + balance_shape
+        self._features_dim = hidden_size_lstm + portfolio_state_shape
 
     def forward(self, observations) -> torch.Tensor:
         if "market_history" not in observations:
             raise ValueError("The observation space is missing 'market_history' field")
         if "portfolio_state" not in observations:
             raise ValueError("The observation space is missing 'portfolio_state' field")
-        if "balance" not in observations:
-            raise ValueError("The observation space is missing 'balance' field")
+        #if "balance" not in observations:
+            #raise ValueError("The observation space is missing 'balance' field")
 
         out, (h_c, c_n) = self.lstm(observations['market_history'])
         out_portfolio_state = self.relu(self.mlp_portfolio(observations['portfolio_state'])) # shape(
-        balance = observations['balance'].view(-1, 1)
-        combined_features = torch.cat((h_c[-1], out_portfolio_state, balance), dim=1)
+        #balance = observations['balance'].view(-1, 1)
+        combined_features = torch.cat((h_c[-1], out_portfolio_state), dim=1)
         return combined_features
 
 
 
 
-policy_kwargs = dict(
-    features_extractor_class=CustomCombinedExtractor,
-    features_extractor_kwargs=dict(observation_space = None,
-                                   hidden_size = 168,
-                                   num_layers_lstm = 2,
-                                   batch_first = True)
-)
+def agent():
+    policy_kwargs = dict(
+        features_extractor_class=CustomCombinedExtractor,
+        features_extractor_kwargs=dict(observation_space=None,
+                                       hidden_size_lstm=168,
+                                       num_layers_lstm=2,
+                                       batch_first=True)
+    )
+    custom_env = CustomEnv(pd.DataFrame())
 
-model = PPO("MultiInputPolicy", "TODO env",
-            #learning_rate=,
-            #n_steps=1,
-            #batch_size=,
-            #n_epochs=,
-            policy_kwargs=policy_kwargs,
-            verbose=1)
+    model = PPO("MultiInputPolicy", custom_env,
+                #learning_rate=,
+                #n_steps=1,
+                #batch_size=,
+                #n_epochs=,
+                policy_kwargs=policy_kwargs,
+                verbose=1)
 
-model.learn(progress_bar=True,
-            #total_timesteps=
-            )
+    model.learn(progress_bar=True,
+                #total_timesteps=
+                )

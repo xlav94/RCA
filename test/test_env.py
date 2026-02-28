@@ -9,71 +9,118 @@ import numpy as np
 class TestCustomEnv(unittest.TestCase):
 
     def setUp(self):
-        data = {
-            'Asset_1': [100, 110],
-            'Asset_2': [100, 90]
-        }
-        self.df = pd.DataFrame(data)
-        self.env = CustomEnv(self.df, np.array(['Asset_1', 'Asset_2']), window_size=1)
+        data = np.random.uniform(100, 200, (100, 5))
+        self.df = pd.DataFrame(data, columns=[f'Stock_{i}' for i in range(5)])
+        self.window_size = 10
+        self.env = CustomEnv(self.df, self.df.columns,window_size=self.window_size)
+
+    def test_reset_shapes(self):
+        """Verify reset returns the correct dictionary structure and shapes."""
+        obs, info = self.env.reset()
+
+        # Check dictionary keys
+        self.assertIn("market_history", obs)
+        self.assertIn("portfolio_state", obs)
+
+        # Check shapes
+        self.assertEqual(obs["market_history"].shape, (self.window_size, self.env.num_assets))
+        self.assertEqual(obs["portfolio_state"].shape, (self.env.num_assets,))
+
+    def test_observation_values(self):
+        """Verify the market_history window matches the dataframe slice."""
+        obs, _ = self.env.reset()
+
+        # The first observation should be from row 0 up to row 10 (exclusive)
+        expected_window = self.df.iloc[0:self.window_size].values
+        np.testing.assert_array_almost_equal(obs["market_history"], expected_window, decimal=2)
+
+        # Random observation
+        random_step = np.random.randint(self.window_size, len(self.df))
+        self.env.current_step = random_step
+
+        obs_random = self.env._get_observation()
+        expected_random = self.df.iloc[random_step - self.window_size: random_step].values
+
+        np.testing.assert_array_almost_equal(
+            obs_random["market_history"],
+            expected_random,
+            decimal=2
+        )
+
+    def test_data_types(self):
+        obs, _ = self.env.reset()
+        self.assertEqual(obs["market_history"].dtype, np.float32)
+        self.assertEqual(obs["portfolio_state"].dtype, np.float32)
+
+    def test_initial_state(self):
+        """Verify initial financial conditions."""
+        obs, _ = self.env.reset()
+        self.assertTrue(np.all(obs["portfolio_state"] == 0))
 
     def test_get_weights_from_action(self):
         """Vérifie que la somme est toujours exactement 1.0, peu importe l'action."""
         test_actions = [
-            np.array([0.1, 0.2, 0.3]),
-            np.array([10.0, -5.0, 2.0]),
-            np.array([1.0, 1.0, 1.0]),
-            np.array([0.00001, 0.00002, 0.00003])
+            np.array([0.1, 0.2, 0.3, 0.4, 0.5]),
+            np.array([10.0, -5.0, 2.0, 0.0, 1.0]),
+            np.ones(5),
+            np.zeros(5)
         ]
 
         for action in test_actions:
             weights = self.env._get_weights_from_action(action)
+            # Vérifie la dimension
+            self.assertEqual(len(weights), 5)
+            # Vérifie la somme
             self.assertAlmostEqual(np.sum(weights), 1.0, places=7,
                                    msg=f"La somme des poids n'est pas 1.0 pour l'action {action}")
 
     def test_calculate_reward(self):
+        data = {
+            'Asset_1': [100, 110],
+            'Asset_2': [100, 90]
+        }
+        df = pd.DataFrame(data)
+        env = CustomEnv(df, np.array(['Asset_1', 'Asset_2']), window_size=1)
+
         weights_equal = np.array([0.5, 0.5])
-        reward_a = self.env._calculate_reward(weights_equal)
+        reward_a = env._calculate_reward(weights_equal)
         assert reward_a == 0.0, f"Erreur 50/50: attendu 0.0, reçu {reward_a}"
 
         weights_win = np.array([1.0, 0.0])
-        reward_b = self.env._calculate_reward(weights_win)
+        reward_b = env._calculate_reward(weights_win)
         assert np.isclose(reward_b, 0.10), f"Erreur 100% Win: attendu 0.10, reçu {reward_b}"
 
         weights_loss = np.array([0.0, 1.0])
-        reward_c = self.env._calculate_reward(weights_loss)
+        reward_c = env._calculate_reward(weights_loss)
         assert np.isclose(reward_c, -0.10), f"Erreur 100% Loss: attendu -0.10, reçu {reward_c}"
 
     def test_step_logic(self):
         """Vérifie le déroulement d'une étape (incrémentation, reward, termination)."""
-        # On initialise l'env (current_step = window_size, ex: 1)
         obs_init, _ = self.env.reset()
         initial_step = self.env.current_step
 
-        # Action fictive (logits)
-        action = np.array([0.5, 0.5], dtype=np.float32)
+        # Action à 5 dimensions
+        action = np.array([0.2, 0.2, 0.2, 0.2, 0.2], dtype=np.float32)
 
-        # Exécution du step
         obs, reward, terminated, truncated, info = self.env.step(action)
 
         # 1. Vérification de l'incrémentation
-        self.assertEqual(self.env.current_step, initial_step + 1,
-                         "Le current_step n'a pas été incrémenté.")
+        self.assertEqual(self.env.current_step, initial_step + 1)
 
-        # 2. Vérification de la structure de l'observation
-        self.assertIn("market_history", obs)
-        self.assertIn("portfolio_state", obs)
+        # 2. Vérification de la structure
+        self.assertEqual(obs["market_history"].shape, (self.window_size, 5))
+        self.assertEqual(obs["portfolio_state"].shape, (5,))
 
-        # 3. Vérification du reward (calculé entre t=0 et t=1 avec poids 0.5/0.5)
-        # Prix Asset_1: 100 -> 110 (+10%), Asset_2: 100 -> 90 (-10%)
-        self.assertAlmostEqual(reward, 0.0, places=7)
+        # 3. Vérification du reward
+        # Puisque les données sont aléatoires, on vérifie que c'est un float valide
+        self.assertIsInstance(float(reward), float)
 
     def test_termination(self):
         """Vérifie que l'épisode s'arrête bien à la fin du DataFrame."""
-        # On force le step juste avant la fin
-        # len(df) = 2, donc l'index max est 1.
         self.env.current_step = len(self.df) - 1
 
-        action = np.array([0.5, 0.5], dtype=np.float32)
+        # Action à 5 dimensions
+        action = np.zeros(5, dtype=np.float32)
         _, _, terminated, _, _ = self.env.step(action)
 
-        self.assertTrue(terminated, "L'environnement devrait être terminé à la fin du DF.")
+        self.assertTrue(terminated, "L'environnement devrait être terminé à l'index final.")

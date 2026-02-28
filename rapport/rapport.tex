@@ -136,4 +136,50 @@
         et des pertes limitées lors des périodes de stress. Les performances devraient se situer à un niveau comparable
         à celui du marché, tel que le S\&P 500, tout en offrant un meilleur contrôle du risque, et montrer que l’agent a
         effectivement appris une stratégie d’allocation cohérente plutôt que de simplement rester inactif.
+
+\section{Related works}
+    \subsection{Foundational Financial Theories}
+    Traditional portfolio optimization methods, such as Markowitz's Modern Portfolio Theory (MPT) \textbf{markowitz1952}
+    have been use for decades to balance risk and return.While foundational, MPT relies on static assumptions and
+    historical covariance matrices that often fail to adapt to the non-linear dynamics of modern financial markets.
+
+    \subsection{Sequential Modeling and Temporal Dependencies}
+    Addressing the partial observability of market states, \textbf{Li et al. (2015)} introduced hybrid RNN-LSTM units
+    within a Q-Learning framework. This allows agents to maintain a "memory" of historical sequences, capturing
+    temporal dependencies essential for decision-making in stochastic environments.
+
+    \subsection{The Evolution of Deep Reinforcement Learning in Finance}
+    To overcome static limitations, \textbf{Jang and Seong (2023)} integrated Deep Reinforcement Learning (DRL) with
+    MPT, using tensor decomposition to process high-dimensional data within traditional risk frameworks.
+    \textbf{Jiang et al. (2017)}further advanced this by using CNNs to automate feature extraction from price channels.
+
+    \subsection{Actor-Critic Frameworks}
+    Modern trading strategies predominantly utilize the \textbf{Actor-Critic framework}, which simultaneously updates
+    a policy network (Actor) and a value function (Critic). As detailed in the FinRL library (\textbf{Liu et al., 2022}),
+    the ensemble approach by \textbf{Yang et al. (2025)}, and the hybrid framework proposed by
+    \textbf{Jang and Seong (2023)}::
+
+    \begin{itemize}
+    \item \textbf{DDPG}(Deep Deterministic Policy Gradient) is employed for continuous portfolio control.
+
+    \item \textbf{A2C}(Advantage Actor Critic) improves stability by using an advantage function to reduce gradient
+        variance in risky markets.
+
+    \item \textbf{PPO}(Proximal Policy Optimization) ensures stable training in volatile environments by restricting
+        the size of policy updates.
+
+    \end{itemize}
+
+    
+    \subsection{Alternative Data and Future Directions}
+    Recent research incorporates diverse data streams. \textbf{Nawathe et al. (2024)} utilized NLP models like
+    FinBERT to integrate news sentiment into the agent's state.Emerging studies, such as \textbf{Liu et al. (2025)},
+    even explore Quantum-Enhanced RL to improve stability in noisy financial systems.
+    
+    \subsection{Risk-Aware Rewards and Responsible Management}
+    To ensure stable and ethical behavior, recent literature emphasizes risk-aware reward functions. As highlighted
+    in both the FinRL framework (\textbf{Liu et al., 2022}) and \textbf{Yang et al. (2025)}, incorporating market
+    frictions (transaction costs) and financial turbulence indices is vital to penalize excessive speculation
+    and survive extreme market crashes.
+
 \end{document}

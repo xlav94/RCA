@@ -29,7 +29,7 @@ source venv/bin/activate
 python -m pip install --upgrade pip
 # On vérifie si le fichier existe avant d'installer
 if [ -f "requirement.txt" ]; then
-    python -m pip install -r requirements.txt
+    python -m pip install -r requirement.txt
 else
     echo "ERREUR : requirement.txt introuvable dans $(pwd)"
     exit 1

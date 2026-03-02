@@ -36,10 +36,10 @@ else
 fi
 
 echo -e "\nRunning Python script..."
-if [ -f "main.py" ]; then
-    python main.py
+if [ -f "src/main.py" ]; then
+    python src/main.py
 else
-    echo "ERREUR : main.py introuvable dans $(pwd)"
+    echo "ERREUR : src/main.py introuvable dans $(pwd)"
     exit 1
 fi
 

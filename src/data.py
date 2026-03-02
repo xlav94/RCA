@@ -96,14 +96,14 @@ class DataPreprocessor:
         These features provide the model with stationary context regarding trend and risk.
         """
         for ticker in self.tickers:
-            close_col = f"Close_{ticker}"
+            open_col = f"Open_{ticker}"
 
-            if close_col in self.df.columns:
+            if open_col in self.df.columns:
                 # 1. Returns: Converts infinitely rising prices into a stationary signal hovering around 0.
-                self.df[f"Return_{ticker}"] = self.df[close_col].pct_change()
+                self.df[f"Return_{ticker}"] = self.df[open_col].pct_change()
 
                 # 2. SMA (Trend): Smooths daily noise so the LSTM can identify the macro market direction.
-                self.df[f"SMA_{window}_{ticker}"] = self.df[close_col].rolling(window=window).mean()
+                self.df[f"SMA_{window}_{ticker}"] = self.df[open_col].rolling(window=window).mean()
 
                 # 3. Volatility (Risk): Gives the Critic network a "panic meter" to help learn risk-averse policies.
                 self.df[f"Vol_{window}_{ticker}"] = self.df[f"Return_{ticker}"].rolling(window=window).std()
@@ -112,23 +112,33 @@ class DataPreprocessor:
         self.df.dropna(inplace=True)
         return self.df
 
-    def split_train_test(self, split_date: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def split_train_test(self, input_df: pd.DataFrame, train_ratio: float = 0.8) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Slices the dataset chronologically.
-        Crucial for time-series: we cannot randomly shuffle data, otherwise the agent peeks into the future.
+        Slices the dataset chronologically using a percentage.
+        E.g., train_ratio=0.8 means 80% of the data is for training, 20% for testing.
         """
-        self.df.index = pd.to_datetime(self.df.index)
-        train_df = self.df[self.df.index < split_date].copy()
-        test_df = self.df[self.df.index >= split_date].copy()
+        # Ensure chronological order before splitting
+        input_df = input_df.sort_index()
+        split_idx = int(len(input_df) * train_ratio)
+        train_df = input_df.iloc[:split_idx].copy()
+        test_df = input_df.iloc[split_idx:].copy()
+
         return train_df, test_df
 
-    def scale_features(self, train_df: pd.DataFrame, test_df: pd.DataFrame, feature_cols: List[str]) -> Tuple[
-        pd.DataFrame, pd.DataFrame]:
+    def get_env_ready_data(self, feature: str = 'Open') -> pd.DataFrame:
         """
-        Normalizes the features so the LSTM inputs are roughly bounded between -1 and 1.
-        NOTE FOR MODEL DEV: The scaler is fit ONLY on the training data to strictly prevent data leakage into the test set.
+        Extracts ONLY the requested feature for the assets, strictly ordered.
+        This prevents the np.dot shape mismatch in the environment's reward calculation.
         """
-        self.scaler.fit(train_df[feature_cols])
-        train_df[feature_cols] = self.scaler.transform(train_df[feature_cols])
-        test_df[feature_cols] = self.scaler.transform(test_df[feature_cols])
-        return train_df, test_df
+        # Create a list of the exact column names the env needs (e.g., ['Open_AAPL', 'Open_MSFT'])
+        ordered_cols = [f"{feature}_{ticker}" for ticker in self.tickers]
+
+        # Verify columns exist to prevent silent typos
+        for col in ordered_cols:
+            if col not in self.df.columns:
+                raise ValueError(f"Missing required column: {col}")
+
+        # Slice the dataframe to just those columns
+        env_df = self.df[ordered_cols].copy()
+
+        return env_df

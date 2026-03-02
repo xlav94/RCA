@@ -12,7 +12,7 @@ class CustomEnv(gym.Env):
         self.initial_balance = float(initial_balance)
         self.env_name = env_name
         self.num_assets = len(stocks)
-        self.weights = np.zeros(self.num_assets, dtype=np.float32)
+        self.weights = np.full(self.num_assets, 1 / self.num_assets)
 
         self.action_space = spaces.Box(low=-1.0,
                                      high=1.0,

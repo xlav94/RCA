@@ -3,3 +3,8 @@ stable_baselines3
 numpy
 pandas
 gymnasium
+yfinance
+scikit-learn
+tensorboard
+tqdm
+rich

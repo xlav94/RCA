@@ -44,4 +44,14 @@ else
     exit 1
 fi
 
-# ... reste du script pour la sauvegarde ...
+echo -e "\nJob terminé. Préparation de la sauvegarde..."
+TIMESTAMP=$(date +%Y%m%d_%H%M)
+OUTPUT_DEST="$HOME/scratch/out/RCA_$TIMESTAMP"
+mkdir -p "$OUTPUT_DEST"
+echo "Sauvegarde des résultats vers : $OUTPUT_DEST"
+
+rsync -av "$SLURM_TMPDIR/RCA/tensorboard_logs" "$OUTPUT_DEST/"
+rsync -av "$SLURM_TMPDIR/RCA/models" "$OUTPUT_DEST/"
+
+echo -e "\nSauvegarde réussie !"
+echo "Tu peux voir tes résultats avec : ls -R $OUTPUT_DEST"

@@ -5,7 +5,7 @@ from src.data import DataPipeline
 from src.env import CustomEnv
 
 config = configparser.ConfigParser()
-config.read('../config.ini')
+config.read('config.ini')
 
 # Configuration parameters for the model
 hidden_size_lstm = config.getint('MODEL', 'HIDDEN_SIZE_LSTM')

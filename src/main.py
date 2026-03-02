@@ -44,7 +44,7 @@ def test():
     pipeline_test = DataPipeline(
         tickers=stocks,
         start_date='2024-01-02',
-        end_date='2025-12-31'
+        end_date='2026-02-28'
     )
     df_test = pipeline_test.get_env_data(feature='Open')
 
@@ -57,9 +57,11 @@ def test():
     done = False
 
     print(f"Début du test sur {len(df_test)} points de données...")
-
+    df_benchmark = df_test.copy()
+    for stock in stocks:
+        df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
     total_cumulative_return = 1.0
-    daily_returns = []
+    total_cum_return_hold = 1.0
     writer =    SummaryWriter(log_dir="./tensorboard_logs/test_results")
     step = 0
 
@@ -69,8 +71,14 @@ def test():
 
         total_cumulative_return *= (1 + float(reward))
 
+        daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step].mean()
+        total_cum_return_hold *= (1 + daily_market_return)
+        writer.add_scalars("Comparison/Cumulative_Return", {
+            "Agent_PPO": total_cumulative_return - 1,
+            "Buy_and_Hold": total_cum_return_hold - 1
+        }, step)
+
         writer.add_scalar("Performance/Daily_Reward", float(reward), step)
-        writer.add_scalar("Performance/Total_Return", total_cumulative_return - 1, step)
         weights_dict = {stocks[i]: float(info["portfolio_weights"][i]) for i in range(len(stocks))}
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
@@ -82,4 +90,4 @@ def test():
 
 
 if __name__ == "__main__":
-    train()
+    test()

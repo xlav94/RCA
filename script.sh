@@ -37,7 +37,7 @@ fi
 
 echo -e "\nRunning Python script..."
 if [ -f "src/main.py" ]; then
-    python src/main.py
+    python -m src.main.py
 else
     echo "ERREUR : src/main.py introuvable dans $(pwd)"
     exit 1

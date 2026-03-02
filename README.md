@@ -18,5 +18,11 @@ rsync -a RCA ~/scratch/code-snapshots/ --exclude .git
 
 ### Run Sbatch
 ```bash
+rsync RCA/script.sh sbatch
 sbatch sbatch/script.sh ~/scratch/code-snapshots/RCA
+```
+See output or error logs in `sbatch/logs/`.
+```bash
+tail -f scratch/logs/slurm-<job_id>-rca.out
+tail -f scratch/logs/slurm-<job_id>-rca.error
 ```

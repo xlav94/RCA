@@ -89,6 +89,33 @@
 
 
 \maketitle
+\section{Project Description}
+
+\subsection{Context}
+In this project, we consider a machine learning agent tasked with managing a portfolio composed of a limited set of financial assets and an initial capital. At each time step, the agent observes the state of the market from historical data (returns, volatility, technical indicators) and can perform elementary actions on these assets: buy, sell, or hold. These actions modify the portfolio allocation and generate a reward depending on performance and risk.\\
+This framework follows a reinforcement learning approach oriented toward responsible risk management, aiming to limit excessive speculative behavior and promote stable long-term investment strategies, within a broader perspective of responsible use of machine learning methods.
+
+\subsection{Objectives}
+The objective of this project is to experiment with the use of recurrent neural networks (RNN/LSTM) combined with reinforcement learning, in order to evaluate to what extent these approaches make it possible to reduce the overall risk of a financial portfolio in a sequential decision-making context.\\\\
+More broadly, this work opens the possibility of examining the transferability of the proposed framework to other domains based on time series and sequential decisions, such as energy, logistics, or resource management.\\\\
+From this perspective, the project notably considers as exploration axes the minimization of portfolio volatility over the investment horizon, the reduction of maximum drawdowns during phases of market stress, the learning of buy, sell, and hold decisions that are coherent over time, limiting excessive reallocations, as well as the analysis of the influence of reward functions oriented toward risk control and stability on the learned allocation policies.
+
+\subsection{Planned Methods}
+\begin{itemize}
+\item \textbf{Observations:} Time windows of historical financial data (returns, volatility, technical indicators) extracted via the Yahoo Finance API.
+
+\item \textbf{Modeling:} State encoder based on recurrent neural networks of type LSTM, coupled with a deep reinforcement learning agent of type Actor-Critic (PPO or DDPG).
+
+\item \textbf{Reward Function:} Combination of portfolio return and penalties related to risk (volatility) and excessive reallocations.
+
+\item \textbf{Evaluation:} Temporal backtesting with comparison to a benchmark index such as the S\&P 500.
+
+\end{itemize}
+
+\subsection{Expected Results}
+The expected results include obtaining a positive overall return over the test horizon, indicating that the agent learns an effective management strategy rather than a trivial behavior. It is also expected that the learned policy produces a relatively stable return, characterized by controlled volatility and limited losses during stress periods. Performance should be at a level comparable to that of the market, such as the S\&P 500, while offering improved risk control and demonstrating that the agent has learned a coherent allocation strategy rather than remaining inactive.
+
+
 \section{Related Works}
 
 \subsection{Foundational Financial Theories}
@@ -124,7 +151,7 @@ Recent work incorporates alternative data streams to enrich state representation
 To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
 
 
-
+\newpage
 \bibliographystyle{plainnat}
 \bibliography{references}
 \end{document}

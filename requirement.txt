@@ -1,1 +1,5 @@
-# TODO
+torch
+stable_baselines3
+numpy
+pandas
+gymnasium

@@ -142,3 +142,28 @@ class DataPreprocessor:
         env_df = self.df[ordered_cols].copy()
 
         return env_df
+
+
+class DataPipeline:
+    """
+    An all-in-one wrapper to provide a simple, clean interface for the RL Environment.
+    It automatically handles downloading and preprocessing behind the scenes.
+    """
+
+    def __init__(self, tickers: List[str], start_date: str, end_date: str, data_path: str = "data/raw"):
+        self.tickers = tickers
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data_path = data_path
+
+    def get_env_data(self, feature: str = 'Open') -> pd.DataFrame:
+        """Downloads the data and filters it perfectly for the environment in one step."""
+        # 1. Download internally
+        downloader = DataDownloader(self.tickers, self.start_date, self.end_date, self.data_path)
+        raw_df = downloader.fetch_data()
+
+        # 2. Preprocess internally
+        preprocessor = DataPreprocessor(raw_df, self.tickers)
+        clean_df = preprocessor.get_env_ready_data(feature=feature)
+
+        return clean_df

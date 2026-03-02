@@ -1,6 +1,6 @@
 import configparser
 
-from model import get_agent
+from src.model import get_agent
 from src.data import DataPipeline
 from src.env import CustomEnv
 

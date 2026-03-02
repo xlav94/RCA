@@ -5,3 +5,6 @@ pandas
 gymnasium
 yfinance
 scikit-learn
+tensorboard
+tqdm
+rich

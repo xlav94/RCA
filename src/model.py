@@ -56,24 +56,23 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
 
 
-def agent():
+def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, batch_first=True,
+              learning_rate=0.001, n_steps=2048, batch_size=50, n_epochs=10):
     policy_kwargs = dict(
         features_extractor_class=CustomCombinedExtractor,
-        features_extractor_kwargs=dict(observation_space=None,
-                                       hidden_size_lstm=168,
-                                       num_layers_lstm=2,
-                                       batch_first=True)
+        features_extractor_kwargs=dict(
+                                       hidden_size_lstm=hidden_size_lstm,
+                                       num_layers_lstm=num_layers_lstm,
+                                       batch_first=batch_first)
     )
-    custom_env = CustomEnv(pd.DataFrame())
 
-    model = PPO("MultiInputPolicy", custom_env,
-                #learning_rate=,
-                #n_steps=1,
-                #batch_size=,
-                #n_epochs=,
+    model = PPO("MultiInputPolicy", env,
+                learning_rate=learning_rate,
+                n_steps=n_steps,
+                batch_size=batch_size,
+                n_epochs=n_epochs,
                 policy_kwargs=policy_kwargs,
-                verbose=1)
-
-    model.learn(progress_bar=True,
-                #total_timesteps=
+                verbose=1,
+                tensorboard_log="./tensorboard_logs/"
                 )
+    return model

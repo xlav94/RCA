@@ -3,6 +3,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
 #SBATCH --gres=gpu:1
+#SBATCH --time=02:00:00
 #SBATCH --output=/home/cedric/scratch/logs/slurm-%j-%x.out
 #SBATCH --error=/home/cedric/scratch/logs/slurm-%j-%x.error
 

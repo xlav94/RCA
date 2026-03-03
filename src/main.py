@@ -2,6 +2,7 @@ import configparser
 from datetime import datetime
 
 import torch
+from sklearn.model_selection import TimeSeriesSplit
 from stable_baselines3 import PPO
 from torch.utils.tensorboard import SummaryWriter
 
@@ -26,9 +27,14 @@ stocks      = config.get('ENV','STOCKS').split(',')
 window_size = config.getint('ENV', 'WINDOW_SIZE')
 env_name    = config.get('ENV', 'ENV_NAME')
 
+df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28').get_env_data(feature='Open')
+train_size = int(len(df) * 0.8)
+df_train = df.iloc[:train_size]
+df_test = df.iloc[train_size:]
+
 def train():
-    df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2024-01-01').get_env_data(feature='Open')
-    env = CustomEnv(df, stocks, window_size=window_size, env_name=env_name)
+
+    env = CustomEnv(df_train, stocks, window_size=window_size, env_name=env_name)
 
     # Train the model
     model = get_agent(env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm,
@@ -41,12 +47,6 @@ def train():
 
 
 def test():
-    pipeline_test = DataPipeline(
-        tickers=stocks,
-        start_date='2024-01-02',
-        end_date='2026-02-28'
-    )
-    df_test = pipeline_test.get_env_data(feature='Open')
 
     env_test = CustomEnv(df_test, stocks, window_size=window_size, env_name=f"{env_name}_test")
 

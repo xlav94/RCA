@@ -84,7 +84,7 @@ class CustomEnv(gym.Env):
         if self.current_step == self.window_size:
             transaction_penality = 0
         else:
-            weight_change = np.sum(np.abs(portfolio_weights - self.weights))
+            weight_change = np.sum(np.abs(portfolio_weights - self.weights)) #L1 norm
             transaction_penality = weight_change * penality_factor
         return portfolio_return - transaction_penality
 

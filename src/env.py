@@ -73,7 +73,7 @@ class CustomEnv(gym.Env):
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
 
-    def _calculate_reward(self, portfolio_weights, penality_factor=0.001):
+    def _calculate_reward(self, portfolio_weights, penality_factor=0.0003):
         # On calcule le rendement quotidien du portefeuille en utilisant les poids et les rendements des actifs
         current_prices = self.df.iloc[self.current_step].values
         previous_prices = self.df.iloc[self.current_step - 1].values

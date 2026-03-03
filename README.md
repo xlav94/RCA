@@ -32,3 +32,9 @@ sbatch sbatch/script.sh ~/scratch/code-snapshots/RCA
 tail -f scratch/logs/slurm-<job_id>-rca.out
 tail -f scratch/logs/slurm-<job_id>-rca.error
 ```
+
+### Problems with sbatch
+```bash
+module purge
+pkill -u $USER
+```

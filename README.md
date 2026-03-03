@@ -13,15 +13,21 @@ tensorboard --logdir tensorboard_logs/<folder>
 mkdir ~/sbatch
 mkdir ~/scratch/code-snapshots
 git clone git@github.com:<username>/RCA.git
-rsync -a RCA ~/scratch/code-snapshots/ --exclude .git
 ``` 
+#### Copy code to cluster
+```bash
+rsync -a RCA ~/scratch/code-snapshots/ --exclude .git
+```
+#### Copy sbatch script to cluster
+```bash
+rsync RCA/script.sh sbatch
+```
 
 ### Run Sbatch
 ```bash
-rsync RCA/script.sh sbatch
 sbatch sbatch/script.sh ~/scratch/code-snapshots/RCA
 ```
-See output or error logs in `sbatch/logs/`.
+#### See output or error logs in `sbatch/logs/`.
 ```bash
 tail -f scratch/logs/slurm-<job_id>-rca.out
 tail -f scratch/logs/slurm-<job_id>-rca.error

@@ -51,7 +51,7 @@ def test():
     env_test = CustomEnv(df_test, stocks, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_20260303-0325.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset()
     done = False
@@ -78,7 +78,8 @@ def test():
             "Buy_and_Hold": total_cum_return_hold - 1
         }, step)
 
-        writer.add_scalar("Performance/Daily_Reward", float(reward), step)
+        writer.add_scalar("Performance/Daily_return", info["portfolio_return"], step)
+        writer.add_scalar("Performance/Transaction_penality", info["transaction_penality"], step)
         weights_dict = {stocks[i]: float(info["portfolio_weights"][i]) for i in range(len(stocks))}
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
@@ -90,4 +91,4 @@ def test():
 
 
 if __name__ == "__main__":
-    train()
+    test()

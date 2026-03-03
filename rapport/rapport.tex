@@ -89,97 +89,69 @@
 
 
 \maketitle
+\section{Project Description}
+
+\subsection{Context}
+In this project, we consider a machine learning agent tasked with managing a portfolio composed of a limited set of financial assets and an initial capital. At each time step, the agent observes the state of the market from historical data (returns, volatility, technical indicators) and can perform elementary actions on these assets: buy, sell, or hold. These actions modify the portfolio allocation and generate a reward depending on performance and risk.\\
+This framework follows a reinforcement learning approach oriented toward responsible risk management, aiming to limit excessive speculative behavior and promote stable long-term investment strategies, within a broader perspective of responsible use of machine learning methods.
+
+\subsection{Objectives}
+The objective of this project is to experiment with the use of recurrent neural networks (RNN/LSTM) combined with reinforcement learning, in order to evaluate to what extent these approaches make it possible to reduce the overall risk of a financial portfolio in a sequential decision-making context.\\\\
+More broadly, this work opens the possibility of examining the transferability of the proposed framework to other domains based on time series and sequential decisions, such as energy, logistics, or resource management.\\\\
+From this perspective, the project notably considers as exploration axes the minimization of portfolio volatility over the investment horizon, the reduction of maximum drawdowns during phases of market stress, the learning of buy, sell, and hold decisions that are coherent over time, limiting excessive reallocations, as well as the analysis of the influence of reward functions oriented toward risk control and stability on the learned allocation policies.
+
+\subsection{Planned Methods}
+\begin{itemize}
+\item \textbf{Observations:} Time windows of historical financial data (returns, volatility, technical indicators) extracted via the Yahoo Finance API.
+
+\item \textbf{Modeling:} State encoder based on recurrent neural networks of type LSTM, coupled with a deep reinforcement learning agent of type Actor-Critic (PPO or DDPG).
+
+\item \textbf{Reward Function:} Combination of portfolio return and penalties related to risk (volatility) and excessive reallocations.
+
+\item \textbf{Evaluation:} Temporal backtesting with comparison to a benchmark index such as the S\&P 500.
+
+\end{itemize}
+
+\subsection{Expected Results}
+The expected results include obtaining a positive overall return over the test horizon, indicating that the agent learns an effective management strategy rather than a trivial behavior. It is also expected that the learned policy produces a relatively stable return, characterized by controlled volatility and limited losses during stress periods. Performance should be at a level comparable to that of the market, such as the S\&P 500, while offering improved risk control and demonstrating that the agent has learned a coherent allocation strategy rather than remaining inactive.
 
 
-\section{Description du projet}
-    \subsection{Contexte}
-        Dans ce projet, on considère un agent d’apprentissage automatique chargé de gérer un portefeuille composé d’un ensemble
-        limité d’actifs financiers et un capital de départ. À chaque pas de temps, l’agent observe l’état du marché à partir de données historiques
-        (rendements, volatilité, indicateurs techniques) et peut effectuer des actions élémentaires sur ces actifs : acheter,
-        vendre ou conserver. Ces actions modifient l’allocation du portefeuille et génèrent une récompense dépendant de
-        la performance et du risque.\\
-        Ce cadre s’inscrit dans une approche d’apprentissage par renforcement orientée vers une gestion responsable
-        du risque, visant à limiter les comportements spéculatifs excessifs, à favoriser des stratégies d’investissement stables
-        à long terme, dans une perspective d'usage responsable des méthodes d’apprentissage automatique.
+\section{Related Works}
 
-    \subsection{Objectifs}
-        L’objectif de ce projet est d’expérimenter l’usage de réseaux récurrents (RNN/LSTM) combiné à l’apprentissage par
-        renforcement, afin d’évaluer dans quelle mesure ces approches permettent de réduire le risque global d’un portefeuille
-        financier dans un contexte de prise de décision séquentielle.\\\\
-        Plus largement, ce travail ouvre la possibilité d’examiner la transférabilité du cadre proposé à d’autres domaines
-        reposant sur des séries temporelles et des décisions séquentielles, tels que l’énergie, la logistique ou la gestion
-        de ressources.\\\\
-        Dans cette perspective, le projet considère notamment comme axes d’exploration la minimisation de la volatilité du
-        portefeuille sur l’horizon d’investissement, la réduction des pertes maximales lors des phases
-        de stress du marché, l’apprentissage de décisions d’achat, de vente et de conservation cohérentes dans le temps,
-        limitant les réallocations excessives, ainsi que l’analyse de l’influence de fonctions de récompense orientées vers
-        le contrôle du risque et la stabilité sur les politiques d’allocation apprises.
+\subsection{Foundational Financial Theories}
 
-    \subsection{Méthodes prévues}
-        \begin{itemize}
-            \item \textbf{Observations} : Fenêtres temporelles de données financières historiques (rendements, volatilité,
-                indicateurs techniques) extraites via l’API de Yahoo Finance.
+Traditional portfolio optimization methods, such as Markowitz's Modern Portfolio Theory (MPT) \citep{markowitz1952portfolio}, have been the industry standard for decades to balance risk and return through diversification. While effective in theory, MPT relies on static rules that often struggle to keep up with the chaotic, fast-moving reality of today's markets.
 
-            \item \textbf{Modélisation} : Encodeur d’état basé sur des réseaux récurrents de type LSTM, couplé à un agent
-                d’apprentissage par renforcement profond de type Actor-Critic (PPO ou DDPG).
+With the rise of machine learning, new approaches have emerged to tackle these limitations. \citet{jang2023deep} proposed integrating Deep Reinforcement Learning (DRL) with Technical Analysis and Modern Portfolio Theory constraints. Unlike traditional supervised learning models that merely predict prices, DRL agents learn sequential decision-making policies directly through interaction with the market environment. This transition from static allocation to dynamic portfolio management is emphasized in the comprehensive survey by \citet{pippas2025evolution}, which traces the evolution of reinforcement learning techniques in quantitative finance.
 
-            \item \textbf{Fonction de récompense} : Combinaison du rendement du portefeuille et de pénalités liées au risque
-                (volatilité) et aux réallocations excessives.
+\subsection{Sequential Modeling and Temporal Dependencies}
 
-            \item \textbf{Évaluation} : Backtesting temporel avec comparaison à un indice de référence tel que le S\&P 500.
+Addressing the partial observability of financial markets, \citet{li2015recurrent} introduced a hybrid recurrent reinforcement learning framework integrating RNN-LSTM architectures within a Q-learning setup. Their approach enables agents to maintain memory of historical market states, capturing temporal dependencies that are critical in stochastic and non-stationary environments.
 
-        \end{itemize}
-    \subsection{Résultats prévus}
-        Les résultats attendus incluent l’obtention d’un rendement global positif sur l’horizon de test, indiquant que
-        l’agent apprend une stratégie de gestion effective plutôt qu’un comportement trivial. On s’attend également à
-        ce que la politique apprise produise un rendement relativement stable, caractérisé par une volatilité maîtrisée
-        et des pertes limitées lors des périodes de stress. Les performances devraient se situer à un niveau comparable
-        à celui du marché, tel que le S\&P 500, tout en offrant un meilleur contrôle du risque, et montrer que l’agent a
-        effectivement appris une stratégie d’allocation cohérente plutôt que de simplement rester inactif.
+\subsection{The Evolution of Deep Reinforcement Learning in Finance}
 
-\section{Related works}
-    \subsection{Foundational Financial Theories}
-    Traditional portfolio optimization methods, such as Markowitz's Modern Portfolio Theory (MPT) \textbf{markowitz1952}
-    have been use for decades to balance risk and return.While foundational, MPT relies on static assumptions and
-    historical covariance matrices that often fail to adapt to the non-linear dynamics of modern financial markets.
+Building upon classical frameworks, \citet{jang2023deep} combined DRL with MPT constraints using tensor decomposition techniques to manage high-dimensional financial data within structured risk frameworks. Similarly, \citet{jiang2017deep} proposed a CNN-based reinforcement learning framework that automates feature extraction from multi-channel price representations, reducing reliance on handcrafted indicators and improving scalability.
 
-    \subsection{Sequential Modeling and Temporal Dependencies}
-    Addressing the partial observability of market states, \textbf{Li et al. (2015)} introduced hybrid RNN-LSTM units
-    within a Q-Learning framework. This allows agents to maintain a "memory" of historical sequences, capturing
-    temporal dependencies essential for decision-making in stochastic environments.
+\subsection{Actor-Critic Frameworks}
 
-    \subsection{The Evolution of Deep Reinforcement Learning in Finance}
-    To overcome static limitations, \textbf{Jang and Seong (2023)} integrated Deep Reinforcement Learning (DRL) with
-    MPT, using tensor decomposition to process high-dimensional data within traditional risk frameworks.
-    \textbf{Jiang et al. (2017)}further advanced this by using CNNs to automate feature extraction from price channels.
+Modern portfolio optimization strategies predominantly rely on the Actor-Critic architecture, which simultaneously updates a policy network (Actor) and a value function estimator (Critic). As implemented in the FinRL framework \citep{liu2020finrl}, in the ensemble strategy proposed by \citet{yang2025ensemble}, and discussed in \citet{jang2023deep}, actor-critic methods provide improved stability and continuous control capabilities.
 
-    \subsection{Actor-Critic Frameworks}
-    Modern trading strategies predominantly utilize the \textbf{Actor-Critic framework}, which simultaneously updates
-    a policy network (Actor) and a value function (Critic). As detailed in the FinRL library (\textbf{Liu et al., 2022}),
-    the ensemble approach by \textbf{Yang et al. (2025)}, and the hybrid framework proposed by
-    \textbf{Jang and Seong (2023)}::
+\begin{itemize}
+    \item \textbf{DDPG} (Deep Deterministic Policy Gradient) enables continuous portfolio weight allocation and deterministic policy updates.
+    \item \textbf{A2C} (Advantage Actor-Critic) reduces gradient variance using an advantage function, improving robustness in volatile markets.
+    \item \textbf{PPO} (Proximal Policy Optimization) stabilizes training by constraining policy updates through clipped objective functions.
+\end{itemize}
 
-    \begin{itemize}
-    \item \textbf{DDPG}(Deep Deterministic Policy Gradient) is employed for continuous portfolio control.
+\subsection{Alternative Data and Future Directions}
 
-    \item \textbf{A2C}(Advantage Actor Critic) improves stability by using an advantage function to reduce gradient
-        variance in risky markets.
+Recent work incorporates alternative data streams to enrich state representations. \citet{nawathe2024multimodal} integrated financial news sentiment using NLP models such as FinBERT into DRL-based portfolio optimization. Emerging research by \citet{liu2025quantum} explores quantum-enhanced reinforcement learning combined with LSTM forecasting signals to improve convergence stability and performance in noisy financial systems.
 
-    \item \textbf{PPO}(Proximal Policy Optimization) ensures stable training in volatile environments by restricting
-        the size of policy updates.
+\subsection{Risk-Aware Rewards and Responsible Management}
 
-    \end{itemize}
+To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
 
-    
-    \subsection{Alternative Data and Future Directions}
-    Recent research incorporates diverse data streams. \textbf{Nawathe et al. (2024)} utilized NLP models like
-    FinBERT to integrate news sentiment into the agent's state.Emerging studies, such as \textbf{Liu et al. (2025)},
-    even explore Quantum-Enhanced RL to improve stability in noisy financial systems.
-    
-    \subsection{Risk-Aware Rewards and Responsible Management}
-    To ensure stable and ethical behavior, recent literature emphasizes risk-aware reward functions. As highlighted
-    in both the FinRL framework (\textbf{Liu et al., 2022}) and \textbf{Yang et al. (2025)}, incorporating market
-    frictions (transaction costs) and financial turbulence indices is vital to penalize excessive speculation
-    and survive extreme market crashes.
 
+\newpage
+\bibliographystyle{plainnat}
+\bibliography{references}
 \end{document}

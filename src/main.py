@@ -1,11 +1,17 @@
 import configparser
+from datetime import datetime
 
-from model import get_agent
+import torch
+from sklearn.model_selection import TimeSeriesSplit
+from stable_baselines3 import PPO
+from torch.utils.tensorboard import SummaryWriter
+
+from src.model import get_agent
 from src.data import DataPipeline
 from src.env import CustomEnv
 
 config = configparser.ConfigParser()
-config.read('../config.ini')
+config.read('config.ini')
 
 # Configuration parameters for the model
 hidden_size_lstm = config.getint('MODEL', 'HIDDEN_SIZE_LSTM')
@@ -21,9 +27,14 @@ stocks      = config.get('ENV','STOCKS').split(',')
 window_size = config.getint('ENV', 'WINDOW_SIZE')
 env_name    = config.get('ENV', 'ENV_NAME')
 
-def main():
-    df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2024-01-01').get_env_data(feature='Open')
-    env = CustomEnv(df, stocks, window_size=window_size, env_name=env_name)
+df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28').get_env_data(feature='Open')
+train_size = int(len(df) * 0.8)
+df_train = df.iloc[:train_size]
+df_test = df.iloc[train_size:]
+
+def train():
+
+    env = CustomEnv(df_train, stocks, window_size=window_size, env_name=env_name)
 
     # Train the model
     model = get_agent(env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm,
@@ -32,7 +43,52 @@ def main():
     model.learn(progress_bar=True,
                     total_timesteps=total_timesteps
                     )
-    model.save('models/ppo_agent')
+    model.save(f'models/ppo_agent_{datetime.now().strftime("%Y%m%d-%H%M")}')
+
+
+def test():
+
+    env_test = CustomEnv(df_test, stocks, window_size=window_size, env_name=f"{env_name}_test")
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = PPO.load('models/ppo_agent_20260303-1732.zip', env=env_test, device=device)
+
+    obs, _ = env_test.reset()
+    done = False
+
+    print(f"Début du test sur {len(df_test)} points de données...")
+    df_benchmark = df_test.copy()
+    for stock in stocks:
+        df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
+    total_cumulative_return = 1.0
+    total_cum_return_hold = 1.0
+    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y%m%d-%H%M')}")
+    step = 0
+
+    while not done:
+        action, _states = model.predict(obs, deterministic=True)
+        obs, reward, terminated, truncated, info = env_test.step(action)
+
+        total_cumulative_return *= (1 + float(reward))
+
+        daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step].mean()
+        total_cum_return_hold *= (1 + daily_market_return)
+        writer.add_scalars("Comparison/Cumulative_Return", {
+            "Agent_PPO": total_cumulative_return - 1,
+            "Buy_and_Hold": total_cum_return_hold - 1
+        }, step)
+
+        writer.add_scalar("Performance/Daily_return", info["portfolio_return"], step)
+        writer.add_scalar("Performance/Transaction_penality", info["transaction_penality"], step)
+        weights_dict = {stocks[i]: float(info["portfolio_weights"][i]) for i in range(len(stocks))}
+        writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
+
+        step += 1
+        done = terminated or truncated
+
+    writer.close()
+    print(f"Test terminé. Profit final: {(total_cumulative_return - 1) * 100:.2f}%")
+
 
 if __name__ == "__main__":
-    main()
+    test()

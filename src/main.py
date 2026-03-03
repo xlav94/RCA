@@ -1,6 +1,6 @@
 import configparser
+from datetime import datetime
 
-import numpy as np
 import torch
 from stable_baselines3 import PPO
 from torch.utils.tensorboard import SummaryWriter
@@ -37,7 +37,7 @@ def train():
     model.learn(progress_bar=True,
                     total_timesteps=total_timesteps
                     )
-    model.save('models/ppo_agent')
+    model.save(f'models/ppo_agent_{datetime.now().strftime("%Y%m%d-%H%M")}')
 
 
 def test():
@@ -62,7 +62,7 @@ def test():
         df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
     total_cumulative_return = 1.0
     total_cum_return_hold = 1.0
-    writer =    SummaryWriter(log_dir="./tensorboard_logs/test_results")
+    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y%m%d-%H%M')}")
     step = 0
 
     while not done:

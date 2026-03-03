@@ -1,9 +1,9 @@
 # RCA
 
-## LOGS
-Training logs are stored in `src/tensorboard_logs/<folder>`. To visualize them, run the following command:
+### LOGS
+Training logs are stored in `tensorboard_logs/<folder>`. To visualize them, run the following command:
 ```
-tensorboard --logdir src/tensorboard_logs/<folder>
+tensorboard --logdir tensorboard_logs/<folder>
 ```
 
 ## Run in Cluster

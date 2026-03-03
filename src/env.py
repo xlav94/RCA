@@ -54,6 +54,9 @@ class CustomEnv(gym.Env):
     def step(self, action : np.ndarray):
         portfolio_weights = self._get_weights_from_action(action)
         reward = self._calculate_reward(portfolio_weights)
+        self.current_step += 1
+        self.weights = portfolio_weights
+
         observation = self._get_observation()
         terminated = self.current_step >= len(self.df) - 1
         truncated = False
@@ -61,7 +64,6 @@ class CustomEnv(gym.Env):
             "portfolio_weights": portfolio_weights,
             "reward": reward,
         }
-        self.current_step += 1
         return observation, reward, terminated, truncated, info
 
     def _get_weights_from_action(self, action, precision=2):
@@ -71,13 +73,20 @@ class CustomEnv(gym.Env):
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
 
-    def _calculate_reward(self, portfolio_weights):
+    def _calculate_reward(self, portfolio_weights, penality_factor=0.001):
         # On calcule le rendement quotidien du portefeuille en utilisant les poids et les rendements des actifs
         current_prices = self.df.iloc[self.current_step].values
         previous_prices = self.df.iloc[self.current_step - 1].values
         asset_returns = (current_prices - previous_prices) / previous_prices
         portfolio_return = np.dot(portfolio_weights, asset_returns)
-        return portfolio_return
+
+        # Penalite si changement de poids important (pour encourager la stabilité du portefeuille)
+        if self.current_step == self.window_size:
+            transaction_penality = 0
+        else:
+            weight_change = np.sum(np.abs(portfolio_weights - self.weights))
+            transaction_penality = weight_change * penality_factor
+        return portfolio_return - transaction_penality
 
     def render(self):
         return

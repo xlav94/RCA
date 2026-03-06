@@ -58,6 +58,7 @@
 \usepackage{graphicx}         % colors
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, calc, backgrounds, fit}
+\usepackage{amsmath}
 % Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote.
 \title{Rapport \\
         Projet avancé en apprentissage automatique \\
@@ -177,9 +178,7 @@ To process the structured multimodal observation space, we implement a custom fe
 \item a \textbf{Multi-Layer Perceptron (MLP)} with a ReLU activation function that processes the static current portfolio allocation state.
 \end{itemize}
 
-The final hidden state of the LSTM is concatenated with the MLP output to produce a combined feature representation. This holistic state vector is then fed into the PPO agent's Actor-Critic architecture. The policy network (Actor) determines the optimal allocation, passing its output through a \textbf{Softmax} layer to ensure the resulting actions represent valid portfolio weights (summing to 1). Simultaneously, the value network (Critic) evaluates the state to guide the Actor's learning based on the reward function. As a final step, the chosen allocation weights loop back to form the portfolio state input for the subsequent time step.
-
-
+The final hidden state of the LSTM is concatenated with the MLP output to produce a combined feature representation. This holistic state vector is then fed into the PPO agent's Actor-Critic architecture. The policy network (Actor) determines the optimal allocation, passing its output through a \textbf{Softmax} layer to ensure the resulting actions represent valid portfolio weights.
 
 \begin{figure}[h!]
     \centering
@@ -248,9 +247,12 @@ The final hidden state of the LSTM is concatenated with the MLP output to produc
 \end{figure}
 
 
-\subsection{Reward Function and Risk Control}
-
-The reward function plays a critical role in guiding responsible decision-making by balancing the instantaneous portfolio return against two heavy penalties: one for transaction costs incurred during rebalancing, and another to explicitly discourage excessive portfolio reallocation. By penalizing erratic shifts, this formulation prevents the agent from adopting speculative, high-frequency trading behaviors. Instead, this targeted reward shaping forces the policy to learn stable, risk-aware, and long-term holding strategies, ensuring the learned allocation remains grounded in realistic financial constraints.
+\subsection{Reward Function}
+The agent aims to maximize the net portfolio return while minimizing rebalancing costs. At each step $t$, the reward $R_t$ is defined as:
+\begin{equation}
+    R_t = \underbrace{\sum_{i=1}^{n} w_{i,t} \left( \frac{p_{i,t} - p_{i,t-1}}{p_{i,t-1}} \right)}_{\text{Portfolio Return}} - \underbrace{\lambda \sum_{i=1}^{n} |w_{i,t} - w_{i,t-1}|}_{\text{Transaction Penalty}}
+\end{equation}
+where $w_{i,t}$ is the portfolio weight for asset $i$, $p_{i,t}$ is the asset price, and $\lambda$ is the penalty factor. This formulation uses a penalty to discourage excessive trading, ensuring the agent only rebalances when the expected return outweighs the transaction costs.
 
 
 \subsection{Training Procedure}
@@ -267,23 +269,22 @@ Preliminary results indicate that the agent progressively learns non-trivial all
 
 \begin{figure}[h!]
     \centering
-    \begin{minipage}{0.42\textwidth}
+    \begin{minipage}{0.48\textwidth}
         \centering
-        \includegraphics[width=\linewidth]{Allocation_Portfolio_Weights.jpg}
-        \caption{Dynamic portfolio allocation over the out-of-sample test period. The PPO agent demonstrates stable, purposeful rebalancing across the 11 assets, actively avoiding erratic, high-frequency shifts.}
+        \includegraphics[width=\linewidth]{Allocation_Portfolio_Weights.png}
+        \caption{Dynamic portfolio allocation.}
         \label{fig:weights}
     \end{minipage}\hfill
-    \begin{minipage}{0.42\textwidth}
+    \begin{minipage}{0.48\textwidth}
         \centering
-        \includegraphics[width=\linewidth]{Comparison_Cumulative_Return.jpg}
-        \caption{Out-of-sample cumulative return. The RL-driven policy (blue) consistently captures market upside while effectively managing downside exposure compared to the static buy-and-hold baseline (red).}
+        \includegraphics[width=\linewidth]{Comparison_Cumulative_Return.png}
+        \caption{Cumulative return.}
         \label{fig:returns}
     \end{minipage}
 \end{figure}
 \subsection{Future Directions}
 
-Future work could explore expanding the pipeline and optimizing risk-adjusted returns through three main avenues. First, extending the observation space with stationary technical features (e.g., Daily Returns, Simple Moving Averages, Volatility) can help prevent vanishing or exploding gradients and provide explicit market risk context to the LSTM. Second, rigorous hyperparameter tuning of the learning rate, rollout steps, and LSTM dimensions could maximize the Sharpe ratio and minimize drawdowns. Finally, advanced backtesting could integrate detailed financial metrics to better evaluate risk-adjusted performance, alongside experimenting with alternative reward formulations that incorporate explicit volatility penalties.
-
+Moving forward, we plan to enhance the system's performance and robustness through three primary avenues. First, we intend to explore \textbf{alternative Deep Reinforcement Learning (DRL) algorithms} to compare their stability and convergence against our current PPO baseline. Second, we will focus on \textbf{feature engineering}, incorporating stationary technical indicators and risk-adjusted metrics into the observation space to provide the agent with richer market context. Finally, we will conduct systematic \textbf{hyperparameter tuning} of the model architecture and training process to optimize for long-term Sharpe ratios and more effective risk management.
 \newpage
 
 

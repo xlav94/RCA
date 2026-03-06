@@ -1,4 +1,5 @@
 \documentclass[final]{article}
+\usepackage{svg}
 
 % if you need to pass options to natbib, use, e.g.:
 %     \PassOptionsToPackage{numbers, compress}{natbib}
@@ -53,9 +54,11 @@
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
-\usepackage{xcolor}         % colors
-
-% Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
+\usepackage{xcolor}
+\usepackage{graphicx}         % colors
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, backgrounds, fit}
+% Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote.
 \title{Rapport \\
         Projet avancé en apprentissage automatique \\
         IFT - 3710}
@@ -83,7 +86,6 @@
     Matricule : 20246224 \\
     \texttt{abdel.ghafour.rahmouni@umontreal.ca}
 }
-
 
 \begin{document}
 
@@ -150,8 +152,141 @@ Recent work incorporates alternative data streams to enrich state representation
 
 To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
 
+\newpage
+
+\section{Developed Methods and Experimental Plan}
+
+This section details the methodology for our dynamic portfolio management system, formulating asset allocation as a sequential decision-making process solved by a Proximal Policy Optimization (PPO) agent. We outline the custom environment, the multimodal Actor-Critic architecture, the risk-aware reward shaping, and the training procedure, concluding with preliminary baseline comparisons and future directions.
+
+\subsection{Environment and Data Pipeline}
+
+The portfolio management problem is formulated as a sequential decision-making task within a custom environment compatible with the \texttt{Gymnasium} interface. The environment simulates the evolution of a portfolio composed of 11 highly capitalized financial assets (MSFT, GOOG, AMZN, BRK-B, WMT, COST, JPM, V, LLY, PG, GLD).
+
+Historical market data covering the period from January 2010 to February 2026 are retrieved via the Yahoo Finance API and processed through a dedicated data pipeline. To ensure chronological integrity and prevent data leakage, the data undergoes a strict time-series split.
+
+At each time step $t$, the agent observes the state of the market and the current portfolio allocation. The observation is composed of two main components represented in a dictionary: \texttt{market\_history}: a matrix of dimension $(W \times N)$ containing historical price information for the $N=11$ assets over a rolling window of the last $W=60$ time steps, and \texttt{portfolio\_state}: a vector describing the current allocation weights of the portfolio.
+
+\subsection{Model Architecture}
+
+The learning agent is implemented using the \textbf{Proximal Policy Optimization (PPO)} algorithm, a widely used Actor-Critic method known for its training stability and strong empirical performance in continuous control tasks.
+
+To process the structured multimodal observation space, we implement a custom feature extractor (\texttt{CustomCombinedExtractor}) composed of two parallel streams:
+
+\begin{itemize}
+\item a \textbf{Long Short-Term Memory (LSTM)} network (configured with 2 layers and a hidden size of 128) that processes the 60-day historical market data to capture temporal dependencies and momentum,
+\item a \textbf{Multi-Layer Perceptron (MLP)} with a ReLU activation function that processes the static current portfolio allocation state.
+\end{itemize}
+
+The final hidden state of the LSTM is concatenated with the MLP output to produce a combined feature representation. This holistic state vector is then fed into the PPO agent's Actor-Critic architecture. The policy network (Actor) determines the optimal allocation, passing its output through a \textbf{Softmax} layer to ensure the resulting actions represent valid portfolio weights (summing to 1). Simultaneously, the value network (Critic) evaluates the state to guide the Actor's learning based on the reward function. As a final step, the chosen allocation weights loop back to form the portfolio state input for the subsequent time step.
+
+
+
+\begin{figure}[h!]
+    \centering
+    \resizebox{0.75\linewidth}{!}{%
+        \begin{tikzpicture}[
+    node distance=0.6cm and 0.8cm, % Espacement très serré pour la largeur
+    layer/.style={rectangle, draw, fill=blue!10, minimum width=1.8cm, minimum height=0.8cm, text centered, font=\sffamily\tiny},
+    input/.style={rectangle, draw, fill=green!10, minimum width=1.6cm, minimum height=0.6cm, font=\sffamily\tiny, rounded corners},
+    merge/.style={circle, draw, fill=orange!20, minimum size=0.5cm, font=\sffamily\tiny},
+    head/.style={rectangle, draw, fill=red!10, minimum width=1.6cm, minimum height=0.6cm, font=\sffamily\tiny},
+    env/.style={draw, fill=gray!5, minimum width=1.8cm, minimum height=0.6cm, font=\sffamily\tiny},
+    arrow/.style={-{Stealth[scale=0.8]}, thick}
+]
+
+    % --- 1. INPUTS ---
+    \node[input] (in_hist) {Price History};
+    \node[input, below=0.6cm of in_hist] (in_port) {Portfolio Weights};
+
+    % --- 2. FEATURES EXTRACTOR ---
+    \node[layer, right=of in_hist] (lstm) {LSTM};
+    \node[layer, right=of in_port] (mlp) {MLP + ReLU};
+
+    % --- 3. CONCATENATION ---
+    \node[merge, right=1cm of $(lstm.east)!0.5!(mlp.east)$] (concat) {$\oplus$};
+    \node[above=0.05cm of concat, font=\sffamily\tiny\bfseries] {Features Vector};
+
+    % --- 4. AGENT (ACTOR) & SOFTMAX ---
+    \node[head, right=2cm of concat] (actor) {Actor};
+    \node[layer, right=0.8cm of actor, fill=yellow!15] (softmax) {Softmax};
+
+    % --- 5. CRITIC & REWARD (Placés en dessous pour sauver de l'espace à droite) ---
+    \node[env, right=1.5cm of softmax] (reward) {Reward Function};
+    \node[head, below=1.2cm of actor] (critic) {Critic};
+    \begin{scope}[on background layer]
+    \node[draw, fill=red!5, inner sep=10pt, rounded corners,
+          fit=(actor) (critic) (softmax), label={[font=\sffamily\bfseries\tiny]above:PPO AGENT (Policy)}] (ppo_box) {};
+    \end{scope}
+
+    % --- CONNEXIONS ---
+    \draw[arrow] (in_hist) -- (lstm);
+    \draw[arrow] (in_port) -- (mlp);
+
+    \draw[arrow] (lstm.east) -- (concat.west);
+    \draw[arrow] (mlp.east) -- (concat.west);
+
+    % Flux vers l'Agent et le Critic
+    \draw[arrow] (concat.east) -- node[pos=0.25, above, font=\tiny] {State} (actor.west);
+    \draw[arrow] (concat.east) -- ++(0.4,0) |- (critic.west);
+
+    % Flux d'exécution
+    \draw[arrow] (actor) -- (softmax);
+    \draw[arrow] (softmax) -- node[pos=0.5, above, font=\tiny] {Actions} (reward);
+
+    % Boucle temporelle (Next state)
+    \draw[arrow, dashed] (softmax.south) -- ++(0,-0.8) -| node[pos=0.25, above, font=\tiny] {} (in_port.south);
+
+    \draw[arrow] (reward.south) |- (critic.east);
+    \draw[arrow] (critic.north) -- node[pos=0.5, right, font=\tiny] {Values} (actor.south);
+
+    % Titres de sections
+    \node[above=0.6cm of lstm, font=\sffamily\bfseries\tiny] {FEATURE EXTRACTION};
+
+\end{tikzpicture}%
+    }
+    \label{fig:architecture}
+\end{figure}
+
+
+\subsection{Reward Function and Risk Control}
+
+The reward function plays a critical role in guiding responsible decision-making by balancing the instantaneous portfolio return against two heavy penalties: one for transaction costs incurred during rebalancing, and another to explicitly discourage excessive portfolio reallocation. By penalizing erratic shifts, this formulation prevents the agent from adopting speculative, high-frequency trading behaviors. Instead, this targeted reward shaping forces the policy to learn stable, risk-aware, and long-term holding strategies, ensuring the learned allocation remains grounded in realistic financial constraints.
+
+
+\subsection{Training Procedure}
+
+The historical dataset is divided chronologically into a training set (80\%) and an out-of-sample evaluation set (20\%). To facilitate iterative experimentation, training hyperparameters and environment variables (such as selected assets and window size) are managed via a centralized configuration file. This modular setup allows for systematic tuning of key parameters across runs, including batch size, rollout length (\texttt{n\_steps}), learning rate, LSTM architecture (hidden size and recurrent layers), optimization epochs, and total timesteps.
+
+Finally, training progress and learning dynamics, such as portfolio returns, allocation weights, and transaction penalties, are monitored using \texttt{TensorBoard}.
+
+\subsection{Evaluation and Preliminary Results}
+
+The learned policy is evaluated through a backtesting procedure on the out-of-sample test dataset (comprising approximately 750 trading days). The performance of the reinforcement learning agent is compared against a benchmark strategy consisting of a simple \textit{buy-and-hold} portfolio.
+
+Preliminary results indicate that the agent progressively learns non-trivial allocation strategies and dynamically adjusts portfolio weights according to market conditions, generating positive yield. The evolution of portfolio weights during the test phase illustrates how the agent adapts its allocation decisions. Thanks to the transaction penalty, the shifts across the 11 assets are purposeful and stable, proving the agent avoids pure speculation. Furthermore, as evidenced in Figure~\ref{fig:returns}, the agent maintains a steady upward trajectory and successfully outperforms the buy-and-hold baseline in cumulative returns, demonstrating an ability to capture market upside while strategically managing exposure.
+
+\begin{figure}[h!]
+    \centering
+    \begin{minipage}{0.42\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Allocation_Portfolio_Weights.jpg}
+        \caption{Dynamic portfolio allocation over the out-of-sample test period. The PPO agent demonstrates stable, purposeful rebalancing across the 11 assets, actively avoiding erratic, high-frequency shifts.}
+        \label{fig:weights}
+    \end{minipage}\hfill
+    \begin{minipage}{0.42\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Comparison_Cumulative_Return.jpg}
+        \caption{Out-of-sample cumulative return. The RL-driven policy (blue) consistently captures market upside while effectively managing downside exposure compared to the static buy-and-hold baseline (red).}
+        \label{fig:returns}
+    \end{minipage}
+\end{figure}
+\subsection{Future Directions}
+
+Future work could explore expanding the pipeline and optimizing risk-adjusted returns through three main avenues. First, extending the observation space with stationary technical features (e.g., Daily Returns, Simple Moving Averages, Volatility) can help prevent vanishing or exploding gradients and provide explicit market risk context to the LSTM. Second, rigorous hyperparameter tuning of the learning rate, rollout steps, and LSTM dimensions could maximize the Sharpe ratio and minimize drawdowns. Finally, advanced backtesting could integrate detailed financial metrics to better evaluate risk-adjusted performance, alongside experimenting with alternative reward formulations that incorporate explicit volatility penalties.
 
 \newpage
+
+
 \bibliographystyle{plainnat}
 \bibliography{references}
 \end{document}

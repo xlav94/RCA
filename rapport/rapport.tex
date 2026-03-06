@@ -54,6 +54,8 @@
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, backgrounds, fit}
 
 % Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
 \title{Rapport \\
@@ -150,7 +152,66 @@ Recent work incorporates alternative data streams to enrich state representation
 
 To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
 
+\section{Model architecture}
+\begin{tikzpicture}[
+    node distance=0.6cm and 0.8cm, % Espacement très serré pour la largeur
+    layer/.style={rectangle, draw, fill=blue!10, minimum width=1.8cm, minimum height=0.8cm, text centered, font=\sffamily\tiny},
+    input/.style={rectangle, draw, fill=green!10, minimum width=1.6cm, minimum height=0.6cm, font=\sffamily\tiny, rounded corners},
+    merge/.style={circle, draw, fill=orange!20, minimum size=0.5cm, font=\sffamily\tiny},
+    head/.style={rectangle, draw, fill=red!10, minimum width=1.6cm, minimum height=0.6cm, font=\sffamily\tiny},
+    env/.style={draw, fill=gray!5, minimum width=1.8cm, minimum height=0.6cm, font=\sffamily\tiny},
+    arrow/.style={-{Stealth[scale=0.8]}, thick}
+]
 
+    % --- 1. INPUTS ---
+    \node[input] (in_hist) {Price History};
+    \node[input, below=0.6cm of in_hist] (in_port) {Portfolio Weights};
+
+    % --- 2. FEATURES EXTRACTOR ---
+    \node[layer, right=of in_hist] (lstm) {LSTM};
+    \node[layer, right=of in_port] (mlp) {MLP + ReLU};
+
+    % --- 3. CONCATENATION ---
+    \node[merge, right=1cm of $(lstm.east)!0.5!(mlp.east)$] (concat) {$\oplus$};
+    \node[above=0.05cm of concat, font=\sffamily\tiny\bfseries] {Features Vector};
+
+    % --- 4. AGENT (ACTOR) & SOFTMAX ---
+    \node[head, right=2cm of concat] (actor) {Actor};
+    \node[layer, right=0.8cm of actor, fill=yellow!15] (softmax) {Softmax};
+
+    % --- 5. CRITIC & REWARD (Placés en dessous pour sauver de l'espace à droite) ---
+    \node[env, right=1.5cm of softmax] (reward) {Reward Function};
+    \node[head, below=1.2cm of actor] (critic) {Critic};
+    \begin{scope}[on background layer]
+    \node[draw, fill=red!5, inner sep=10pt, rounded corners,
+          fit=(actor) (critic) (softmax), label={[font=\sffamily\bfseries\tiny]above:PPO AGENT (Policy)}] (ppo_box) {};
+    \end{scope}
+
+    % --- CONNEXIONS ---
+    \draw[arrow] (in_hist) -- (lstm);
+    \draw[arrow] (in_port) -- (mlp);
+
+    \draw[arrow] (lstm.east) -- (concat.west);
+    \draw[arrow] (mlp.east) -- (concat.west);
+
+    % Flux vers l'Agent et le Critic
+    \draw[arrow] (concat.east) -- node[pos=0.25, above, font=\tiny] {State} (actor.west);
+    \draw[arrow] (concat.east) -- ++(0.4,0) |- (critic.west);
+
+    % Flux d'exécution
+    \draw[arrow] (actor) -- (softmax);
+    \draw[arrow] (softmax) -- node[pos=0.5, above, font=\tiny] {Actions} (reward);
+
+    % Boucle temporelle (Next state)
+    \draw[arrow, dashed] (softmax.south) -- ++(0,-0.8) -| node[pos=0.25, above, font=\tiny] {} (in_port.south);
+
+    \draw[arrow] (reward.south) |- (critic.east);
+    \draw[arrow] (critic.north) -- node[pos=0.5, right, font=\tiny] {Values} (actor.south);
+
+    % Titres de sections
+    \node[above=0.6cm of lstm, font=\sffamily\bfseries\tiny] {FEATURE EXTRACTION};
+
+\end{tikzpicture}
 \newpage
 \bibliographystyle{plainnat}
 \bibliography{references}

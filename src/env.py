@@ -1,6 +1,7 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from pypfopt import EfficientFrontier, risk_models, objective_functions
 from scipy.special import softmax
 
 class CustomEnv(gym.Env):
@@ -52,7 +53,7 @@ class CustomEnv(gym.Env):
         return self._get_observation(), {}
 
     def step(self, action : np.ndarray):
-        portfolio_weights = self._get_weights_from_action(action)
+        portfolio_weights = self._get_weights_from_action_mpt(action)
         portfolio_return, transaction_penality = self._calculate_reward(portfolio_weights)
         reward = portfolio_return - transaction_penality
         self.current_step += 1
@@ -75,6 +76,22 @@ class CustomEnv(gym.Env):
         diff = 1 - np.sum(rounded_weights)
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
+
+    def _get_weights_from_action_mpt(self, action, precision=3):
+        try:
+            prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
+            cov_matrix = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+            ef = EfficientFrontier(action, cov_matrix)
+            ef.add_objective(objective_functions.L2_reg, gamma=1)
+            raw_weights = ef.max_sharpe()
+            raw_weights_list = np.array(list(raw_weights.values()))
+            weights = np.round(raw_weights_list, decimals=precision)
+            diff = 1 - np.sum(weights)
+            weights[weights.argmax()] += diff
+        except Exception as e:
+            print(f"Error in MPT optimization: {e}")
+            weights = np.full(self.num_assets, 1 / self.num_assets)
+        return weights
 
     def _calculate_reward(self, portfolio_weights, penality_factor=0.0003):
         # On calcule le rendement quotidien du portefeuille en utilisant les poids et les rendements des actifs

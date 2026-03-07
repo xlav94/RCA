@@ -124,3 +124,27 @@ class TestCustomEnv(unittest.TestCase):
         _, _, terminated, _, _ = self.env.step(action)
 
         self.assertTrue(terminated, "L'environnement devrait être terminé à l'index final.")
+
+    def test_get_weights_mpt_robustness(self):
+        """Teste la validité des poids et le fallback en cas d'erreur."""
+        self.env.current_step = 20
+
+        # 1. TEST DE VALIDITÉ : Action normale
+        action_valide = np.array([0.5, -0.2, 0.1, 0.8, -0.1])
+        weights = self.env._get_weights_from_action_mpt(action_valide)
+
+        # Vérifications
+        self.assertIsInstance(weights, np.ndarray, "Doit retourner un np.ndarray")
+        self.assertEqual(weights.shape, (5,), "La taille du vecteur doit être égale au nombre d'actifs")
+        self.assertAlmostEqual(np.sum(weights), 1.0, places=4, msg="La somme des poids doit être égale à 1")
+        self.assertTrue(np.all(weights >= 0),
+                        "Par défaut, Markowitz ne doit pas retourner de poids négatifs (Long-only)")
+
+        # 2. TEST DE RÉSILIENCE : Action avec NaN (simule un crash du réseau de neurones)
+        action_corrompue = np.array([np.nan, 1.0, 0.5, 0.2, 0.1])
+        weights_fallback = self.env._get_weights_from_action_mpt(action_corrompue)
+
+        # Vérification du Equal Weight (1/5 = 0.2)
+        expected_fallback = np.full(5, 0.2)
+        np.testing.assert_array_almost_equal(weights_fallback, expected_fallback,
+                                             err_msg="Le fallback doit être un Equal-Weight en cas d'erreur")

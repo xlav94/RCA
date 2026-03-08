@@ -1,9 +1,11 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from scipy.optimize import minimize
 from scipy.special import softmax
-import riskfolio as rp
 import pandas as pd
+from sklearn.covariance import LedoitWolf
+
 
 class CustomEnv(gym.Env):
     def __init__(self, df, stocks, window_size=50, initial_balance=10000, env_name='RCA'):
@@ -78,21 +80,49 @@ class CustomEnv(gym.Env):
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
 
-    def _get_weights_from_action_mpt(self, action, precision=3, upper_bound=0.50, lower_bound=0.03):
+    def _get_weights_from_action_mpt(self, action, precision=3):
         try:
+            if np.any(np.isnan(action)):
+                raise ValueError("Action contient des NaN")
+
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.pct_change().dropna()
-            port = rp.Portfolio(returns=returns)
-            port.assets_stats(method_mu='hist', method_cov='ledoit')
-            port.mu = pd.Series(action, index=returns.columns)
-            w = port.optimization(model='Classic', rm='MV', obj='Sharpe', rf=0)
-            raw_weights_list = w.T.values.flatten()
-            weights = np.round(raw_weights_list, decimals=precision)
+
+            lw = LedoitWolf().fit(returns)
+            cov_matrix = lw.covariance_
+            mu = action
+
+            num_assets = self.num_assets
+
+            def objective(weights):
+                port_return = np.dot(weights, mu)
+                port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+                # On ajoute une petite constante 1e-9 pour éviter la division par zéro
+                return - (port_return / (port_vol + 1e-9))
+
+            # 4. Contraintes et Bornes (0.05 à 0.50)
+            constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
+            # Bounds remplace tes lower_constraints et upper_constraints
+            bounds = tuple((0.05, 0.50) for _ in range(num_assets))
+
+            # Point de départ : Equal Weight
+            initial_weights = np.full(num_assets, 1 / num_assets)
+
+            # 5. Optimisation via SLSQP (très rapide et ne nécessite pas de solveur externe)
+            result = minimize(objective, initial_weights, method='SLSQP',
+                              bounds=bounds, constraints=constraints, tol=1e-6)
+
+            if not result.success:
+                raise ValueError(f"Optimisation SciPy échouée : {result.message}")
+
+            # 6. Post-traitement et arrondi
+            weights = np.round(result.x, decimals=precision)
             diff = 1.0 - np.sum(weights)
             weights[weights.argmax()] += diff
 
         except Exception as e:
             print(f"Error in MPT optimization: {e}")
+            # Fallback de sécurité
             weights = np.full(self.num_assets, 1 / self.num_assets)
 
         return weights

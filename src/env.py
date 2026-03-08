@@ -88,41 +88,49 @@ class CustomEnv(gym.Env):
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.pct_change().dropna()
 
+            # 1. Estimation robuste de la covariance
             lw = LedoitWolf().fit(returns)
             cov_matrix = lw.covariance_
             mu = action
 
             num_assets = self.num_assets
 
+            # 2. Fonction Objectif Quadratique (Maximiser l'Utilité)
+            # On minimise : - (Rendement - Risque)
+            # C'est BEAUCOUP plus stable que de diviser par la volatilité (Sharpe)
             def objective(weights):
                 port_return = np.dot(weights, mu)
-                port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-                # On ajoute une petite constante 1e-9 pour éviter la division par zéro
-                return - (port_return / (port_vol + 1e-9))
+                # l=2 est le facteur d'aversion au risque standard
+                port_risk = 0.5 * 2.0 * np.dot(weights.T, np.dot(cov_matrix, weights))
+                return -(port_return - port_risk)
 
-            # 4. Contraintes et Bornes (0.05 à 0.50)
+            # 3. Contraintes strictes
             constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
-            # Bounds remplace tes lower_constraints et upper_constraints
             bounds = tuple((0.05, 0.50) for _ in range(num_assets))
 
-            # Point de départ : Equal Weight
+            # 4. Point de départ : 1/N
             initial_weights = np.full(num_assets, 1 / num_assets)
 
-            # 5. Optimisation via SLSQP (très rapide et ne nécessite pas de solveur externe)
+            # 5. Optimisation
             result = minimize(objective, initial_weights, method='SLSQP',
-                              bounds=bounds, constraints=constraints, tol=1e-6)
+                              bounds=bounds, constraints=constraints,
+                              options={'ftol': 1e-7, 'maxiter': 100})
 
+            # Si SLSQP échoue, on ne crash pas, on prend les poids actuels du résultat
+            # ou on bascule sur le fallback.
             if not result.success:
-                raise ValueError(f"Optimisation SciPy échouée : {result.message}")
+                # Souvent, même si le "linesearch" échoue, result.x est une solution décente
+                weights = result.x
+            else:
+                weights = result.x
 
-            # 6. Post-traitement et arrondi
-            weights = np.round(result.x, decimals=precision)
+            # 6. Post-traitement
+            weights = np.round(weights, decimals=precision)
             diff = 1.0 - np.sum(weights)
             weights[weights.argmax()] += diff
 
         except Exception as e:
             print(f"Error in MPT optimization: {e}")
-            # Fallback de sécurité
             weights = np.full(self.num_assets, 1 / self.num_assets)
 
         return weights

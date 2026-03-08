@@ -1,8 +1,9 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from pypfopt import EfficientFrontier, risk_models, objective_functions
 from scipy.special import softmax
+import riskfolio as rp
+import pandas as pd
 
 class CustomEnv(gym.Env):
     def __init__(self, df, stocks, window_size=50, initial_balance=10000, env_name='RCA'):
@@ -77,20 +78,23 @@ class CustomEnv(gym.Env):
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
 
-    def _get_weights_from_action_mpt(self, action, precision=3):
+    def _get_weights_from_action_mpt(self, action, precision=3, upper_bound=0.50, lower_bound=0.03):
         try:
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
-            cov_matrix = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
-            ef = EfficientFrontier(action, cov_matrix)
-            ef.add_objective(objective_functions.L2_reg, gamma=1)
-            raw_weights = ef.max_sharpe()
-            raw_weights_list = np.array(list(raw_weights.values()))
+            returns = prices.pct_change().dropna()
+            port = rp.Portfolio(returns=returns)
+            port.assets_stats(method_mu='hist', method_cov='ledoit')
+            port.mu = pd.Series(action, index=returns.columns)
+            w = port.optimization(model='Classic', rm='MV', obj='Sharpe', rf=0)
+            raw_weights_list = w.T.values.flatten()
             weights = np.round(raw_weights_list, decimals=precision)
-            diff = 1 - np.sum(weights)
+            diff = 1.0 - np.sum(weights)
             weights[weights.argmax()] += diff
+
         except Exception as e:
             print(f"Error in MPT optimization: {e}")
             weights = np.full(self.num_assets, 1 / self.num_assets)
+
         return weights
 
     def _calculate_reward(self, portfolio_weights, penality_factor=0.0003):

@@ -57,7 +57,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
 
 def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, batch_first=True,
-              learning_rate=0.001, n_steps=2048, batch_size=50, n_epochs=10):
+              learning_rate=0.001, n_steps=2048, batch_size=50, n_epochs=10, seed=1):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"L'agent s'entraînera sur : {device}")
@@ -75,6 +75,7 @@ def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, batch_first=True,
                 n_steps=n_steps,
                 batch_size=batch_size,
                 n_epochs=n_epochs,
+                seed=seed,
                 policy_kwargs=policy_kwargs,
                 verbose=1,
                 tensorboard_log="./tensorboard_logs/",

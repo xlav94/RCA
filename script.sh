@@ -20,7 +20,7 @@ echo "Contenu du dossier actuel ($(pwd)) :"
 ls -F  # Ceci affichera la liste des fichiers pour confirmer la présence de main.py
 
 echo -e "\nSetting up Python environment..."
-module load python/3.11
+module load python/3.13
 export PYTHONUNBUFFERED=1
 
 # On crée le venv

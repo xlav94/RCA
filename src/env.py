@@ -80,7 +80,7 @@ class CustomEnv(gym.Env):
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
 
-    def _get_weights_from_action_mpt(self, action, precision=3):
+    def _get_weights_from_action_mpt(self, action, precision=3, lower_bound=0.05, upper_bound=0.50):
         try:
             if np.any(np.isnan(action)):
                 raise ValueError("Action contient des NaN")
@@ -88,31 +88,28 @@ class CustomEnv(gym.Env):
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.pct_change().dropna()
 
-            # 1. Estimation robuste de la covariance
             lw = LedoitWolf().fit(returns)
             cov_matrix = lw.covariance_
             mu = action
 
             num_assets = self.num_assets
+            constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
+            bounds = tuple((lower_bound, upper_bound) for _ in range(num_assets))
 
-            # 2. Fonction Objectif Quadratique (Maximiser l'Utilité)
-            # On minimise : - (Rendement - Risque)
-            # C'est BEAUCOUP plus stable que de diviser par la volatilité (Sharpe)
-            def objective(weights):
+            def objective_MPT(weights, l=2.0):
                 port_return = np.dot(weights, mu)
-                # l=2 est le facteur d'aversion au risque standard
-                port_risk = 0.5 * 2.0 * np.dot(weights.T, np.dot(cov_matrix, weights))
+                port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
                 return -(port_return - port_risk)
 
-            # 3. Contraintes strictes
-            constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
-            bounds = tuple((0.05, 0.50) for _ in range(num_assets))
+            def objective_PMPT(weights, l=2.0):
+                port_return = np.dot(weights, mu)
+                historical_port_return = np.dot(returns, weights)
+                downside_risk = np.mean(np.square(np.minimum(0, historical_port_return)))
+                return -(port_return - l * downside_risk)
 
-            # 4. Point de départ : 1/N
             initial_weights = np.full(num_assets, 1 / num_assets)
 
-            # 5. Optimisation
-            result = minimize(objective, initial_weights, method='SLSQP',
+            result = minimize(objective_PMPT, initial_weights, method='SLSQP',
                               bounds=bounds, constraints=constraints,
                               options={'ftol': 1e-7, 'maxiter': 100})
 

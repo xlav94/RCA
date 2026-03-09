@@ -101,7 +101,7 @@ class CustomEnv(gym.Env):
                 port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
                 return -(port_return - port_risk)
 
-            def objective_PMPT(weights, l=2.0):
+            def objective_PMPT(weights, l=1.0):
                 port_return = np.dot(weights, mu)
                 historical_port_return = np.dot(returns, weights)
                 downside_risk = np.mean(np.square(np.minimum(0, historical_port_return)))

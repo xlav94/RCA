@@ -3,6 +3,7 @@ from datetime import datetime
 
 import torch
 from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import SubprocVecEnv
 from torch.utils.tensorboard import SummaryWriter
 
 from src.model import get_agent
@@ -31,12 +32,18 @@ train_size = int(len(df) * 0.8)
 df_train = df.iloc[:train_size]
 df_test = df.iloc[train_size:]
 
-def train():
+def make_env(df, stocks, window_size, env_name):
+    def _init():
+        return CustomEnv(df, stocks, window_size=window_size, env_name=env_name)
+    return _init
 
-    env = CustomEnv(df_train, stocks, window_size=window_size, env_name=env_name)
+def train():
+    num_cpu = 8
+
+    vec_env = SubprocVecEnv([make_env(df_train, stocks, window_size, env_name) for _ in range(num_cpu)])
 
     # Train the model
-    model = get_agent(env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm,
+    model = get_agent(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm,
                       learning_rate=learning_rate, n_steps=n_steps, batch_size=batch_size, n_epochs=n_epochs)
 
     model.learn(progress_bar=True,

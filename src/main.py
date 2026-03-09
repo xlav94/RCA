@@ -3,7 +3,7 @@ from datetime import datetime
 
 import torch
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from torch.utils.tensorboard import SummaryWriter
 
 from src.model import get_agent
@@ -41,6 +41,8 @@ def train():
     num_cpu = 8
 
     vec_env = SubprocVecEnv([make_env(df_train, stocks, window_size, env_name) for _ in range(num_cpu)])
+
+    vec_env = VecMonitor(vec_env)
 
     # Train the model
     model = get_agent(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm,

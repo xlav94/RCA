@@ -109,7 +109,7 @@ class CustomEnv(gym.Env):
 
             initial_weights = np.full(num_assets, 1 / num_assets)
 
-            result = minimize(objective_PMPT, initial_weights, method='SLSQP',
+            result = minimize(objective_MPT, initial_weights, method='SLSQP',
                               bounds=bounds, constraints=constraints,
                               options={'ftol': 1e-7, 'maxiter': 100})
 

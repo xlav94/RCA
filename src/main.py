@@ -59,7 +59,7 @@ def test():
     env_test = CustomEnv(df_test, stocks, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_20260309-2143.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_20260310-0230.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset()
     done = False

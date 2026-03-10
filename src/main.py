@@ -1,5 +1,8 @@
 import configparser
 from datetime import datetime
+import os
+import random
+import numpy as np
 
 import torch
 from sklearn.model_selection import TimeSeriesSplit
@@ -21,6 +24,7 @@ n_steps           = config.getint('MODEL', 'N_STEPS')
 batch_size        = config.getint('MODEL', 'BATCH_SIZE')
 n_epochs          = config.getint('MODEL', 'N_EPOCHS')
 total_timesteps   = config.getint('MODEL', 'TOTAL_TIMESTEPS')
+seed            = config.getint('MODEL', 'SEED')
 
 # Configuration parameters for the environment
 stocks      = config.get('ENV','STOCKS').split(',')
@@ -31,6 +35,17 @@ df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28'
 train_size = int(len(df) * 0.8)
 df_train = df.iloc[:train_size]
 df_test = df.iloc[train_size:]
+
+def seed_everything(seed: int):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 def train():
 
@@ -46,14 +61,13 @@ def train():
     model.save(f'models/ppo_agent_{datetime.now().strftime("%Y%m%d-%H%M")}')
 
 
-def test():
-
+def test(seed: int):
     env_test = CustomEnv(df_test, stocks, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_20260303-1732.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_20260303-0325.zip', env=env_test, device=device)
 
-    obs, _ = env_test.reset()
+    obs, _ = env_test.reset(seed=seed)
     done = False
 
     print(f"Début du test sur {len(df_test)} points de données...")
@@ -91,4 +105,5 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    seed_everything(seed)
+    test(seed)

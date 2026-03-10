@@ -13,17 +13,6 @@ from src.model import get_agent
 from src.data import DataPipeline
 from src.env import CustomEnv
 
-def seed_everything(seed: int):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
 config = configparser.ConfigParser()
 config.read('config.ini')
 
@@ -35,6 +24,7 @@ n_steps           = config.getint('MODEL', 'N_STEPS')
 batch_size        = config.getint('MODEL', 'BATCH_SIZE')
 n_epochs          = config.getint('MODEL', 'N_EPOCHS')
 total_timesteps   = config.getint('MODEL', 'TOTAL_TIMESTEPS')
+seed            = config.getint('MODEL', 'SEED')
 
 # Configuration parameters for the environment
 stocks      = config.get('ENV','STOCKS').split(',')
@@ -45,6 +35,17 @@ df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28'
 train_size = int(len(df) * 0.8)
 df_train = df.iloc[:train_size]
 df_test = df.iloc[train_size:]
+
+def seed_everything(seed: int):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 def train():
 
@@ -104,6 +105,5 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    seed_number = 1
-    seed_everything(seed_number)
-    test(seed_number)
+    seed_everything(seed)
+    test(seed)

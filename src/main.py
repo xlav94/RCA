@@ -46,13 +46,13 @@ train_size = int(len(df) * 0.8)
 df_train = df.iloc[:train_size]
 df_test = df.iloc[train_size:]
 
-def train(seed: int):
+def train():
 
     env = CustomEnv(df_train, stocks, window_size=window_size, env_name=env_name)
 
     # Train the model
     model = get_agent(env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm,
-                      learning_rate=learning_rate, n_steps=n_steps, batch_size=batch_size, n_epochs=n_epochs, seed=seed)
+                      learning_rate=learning_rate, n_steps=n_steps, batch_size=batch_size, n_epochs=n_epochs)
 
     model.learn(progress_bar=True,
                     total_timesteps=total_timesteps
@@ -106,4 +106,4 @@ def test(seed: int):
 if __name__ == "__main__":
     seed_number = 1
     seed_everything(seed_number)
-    train(seed_number)
+    test(seed_number)

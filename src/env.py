@@ -80,7 +80,7 @@ class CustomEnv(gym.Env):
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
 
-    def _get_weights_from_action_mpt(self, action, precision=3, lower_bound=0.05, upper_bound=0.50):
+    def _get_weights_from_action_mpt(self, action, precision=3, lower_bound=0., upper_bound=0.10):
         try:
             if np.any(np.isnan(action)):
                 raise ValueError("Action contient des NaN")

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=rca
+#SBATCH --job-name=Deep-PMPT
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:1

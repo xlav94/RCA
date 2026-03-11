@@ -101,27 +101,26 @@ class CustomEnv(gym.Env):
                 port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
                 return -(port_return - port_risk)
 
-            def objective_PMPT(weights, l=1.0):
-                port_return = np.dot(weights, mu)
-                historical_port_return = np.dot(returns, weights)
-                downside_risk = np.mean(np.square(np.minimum(0, historical_port_return)))
+            def objective_PMPT(weights, l=1.0, epsilon=1e-5):
+                port_return = weights @ mu
+                historical_port_return = returns @ weights
+                downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
                 return -(port_return - l * downside_risk)
+
+            def jacobian_PMPT(weights, l=1.0, epsilon=1e-5):
+                historical_port_return = returns @ weights
+                downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+                grad_risk = (1 / (len(returns) * downside_risk)) * returns.T @ np.clip(historical_port_return, None, 0)
+                return -(mu - l * grad_risk)
 
             initial_weights = np.full(num_assets, 1 / num_assets)
 
             result = minimize(objective_PMPT, initial_weights, method='SLSQP',
                               bounds=bounds, constraints=constraints,
+                              jac=jacobian_PMPT,
                               options={'ftol': 1e-7, 'maxiter': 100})
 
-            # Si SLSQP échoue, on ne crash pas, on prend les poids actuels du résultat
-            # ou on bascule sur le fallback.
-            if not result.success:
-                # Souvent, même si le "linesearch" échoue, result.x est une solution décente
-                weights = result.x
-            else:
-                weights = result.x
-
-            # 6. Post-traitement
+            weights = result.x
             weights = np.round(weights, decimals=precision)
             diff = 1.0 - np.sum(weights)
             weights[weights.argmax()] += diff

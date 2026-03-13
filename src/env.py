@@ -3,7 +3,6 @@ from gymnasium import spaces
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import softmax
-import pandas as pd
 from sklearn.covariance import LedoitWolf
 
 
@@ -35,7 +34,6 @@ class CustomEnv(gym.Env):
                 shape=(self.num_assets,),  # Weights for Assets
                 dtype=np.float32
             ),
-            #"balance": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         })
 
     def _get_observation(self) -> dict:

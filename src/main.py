@@ -17,8 +17,10 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 # Configuration parameters for the model
-hidden_size_lstm = config.getint('MODEL', 'HIDDEN_SIZE_LSTM')
+hidden_size_lstm  = config.getint('MODEL', 'HIDDEN_SIZE_LSTM')
 num_layers_lstm   = config.getint('MODEL', 'NUM_LAYERS_LSTM')
+dropout_lstm      = config.getfloat('MODEL', 'DROPOUT_LSTM')
+use_cnn           = config.getboolean('MODEL', 'USE_CNN')
 learning_rate     = config.getfloat('MODEL', 'LEARNING_RATE')
 n_steps           = config.getint('MODEL', 'N_STEPS')
 batch_size        = config.getint('MODEL', 'BATCH_SIZE')
@@ -26,6 +28,7 @@ n_epochs          = config.getint('MODEL', 'N_EPOCHS')
 total_timesteps   = config.getint('MODEL', 'TOTAL_TIMESTEPS')
 seed              = config.getint('MODEL', 'SEED')
 num_cpu           = config.getint('MODEL', 'NUM_CPU')
+
 # Configuration parameters for the environment
 stocks      = config.get('ENV','STOCKS').split(',')
 window_size = config.getint('ENV', 'WINDOW_SIZE')
@@ -112,5 +115,6 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    seed_everything(seed)
-    test(seed)
+    #seed_everything(seed)
+    #test(seed)
+    train()

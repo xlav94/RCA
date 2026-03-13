@@ -1,18 +1,19 @@
-import pandas as pd
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from gymnasium import spaces
-from src.env import CustomEnv
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
     def __init__(self,
                 observation_space: spaces.Dict = None,
                 hidden_size_lstm=168,
                 num_layers_lstm=2,
-                batch_first=True):
+                lstm_dropout=0,
+                batch_first=True,
+                use_cnn=False):
 
         super().__init__(observation_space, features_dim=1)
+        self.use_cnn = use_cnn
 
         if observation_space is None:
             raise ValueError("Observation space cannot be None")
@@ -20,21 +21,47 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
             raise ValueError("The observation space is missing 'market_history' field")
         if "portfolio_state" not in observation_space.spaces:
             raise ValueError("The observation space is missing 'portfolio_state' field")
-        #if "balance" not in observation_space.spaces:
-            #raise ValueError("The observation space is missing 'balance' field")
+
+        if self.use_cnn:
+            # CNN to extract features from the market history
+            self.cnn = torch.nn.Sequential(
+                # Layer 1
+                torch.nn.Conv1d(in_channels=observation_space.spaces["market_history"].shape[1],
+                                out_channels=32,
+                                kernel_size=3,
+                                padding=1
+                                ),
+                torch.nn.ReLU(),
+                torch.nn.MaxPool1d(2),
+                # Layer 2
+                torch.nn.Conv1d(in_channels=32,
+                                out_channels=64,
+                                kernel_size=3,
+                                padding=1
+                                ),
+                torch.nn.ReLU(),
+                torch.nn.MaxPool1d(2),
+                # Layer 3
+                torch.nn.Conv1d(in_channels=64,
+                                out_channels=128,
+                                kernel_size=3,
+                                padding=1
+                                ),
+                torch.nn.ReLU(),
+            )
+            market_history_shape = 128
+        else:
+            market_history_shape = observation_space.spaces['market_history'].shape[1]
 
         # LSTM to extract features from the market history
-        market_history_shape = observation_space.spaces['market_history'].shape[1]
         self.lstm = torch.nn.LSTM(input_size=market_history_shape, hidden_size=hidden_size_lstm,
-                                  num_layers=num_layers_lstm, batch_first=batch_first)
+                                  num_layers=num_layers_lstm, batch_first=batch_first,
+                                  dropout=lstm_dropout)
 
         # Simple linear layer to process the portfolio state
         portfolio_state_shape = observation_space.spaces['portfolio_state'].shape[0]
         self.mlp_portfolio = torch.nn.Linear(portfolio_state_shape, portfolio_state_shape)
         self.relu = torch.nn.ReLU()
-
-        # The balance is a single scalar value, so we can directly use it without additional processing
-        #balance_shape = observation_space.spaces['balance'].shape[0]
 
         # Update the features dimension to reflect the combined output of the LSTM and MLP
         self._features_dim = hidden_size_lstm + portfolio_state_shape
@@ -44,19 +71,21 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
             raise ValueError("The observation space is missing 'market_history' field")
         if "portfolio_state" not in observations:
             raise ValueError("The observation space is missing 'portfolio_state' field")
-        #if "balance" not in observations:
-            #raise ValueError("The observation space is missing 'balance' field")
 
-        out, (h_c, c_n) = self.lstm(observations['market_history'])
-        out_portfolio_state = self.relu(self.mlp_portfolio(observations['portfolio_state'])) # shape(
-        #balance = observations['balance'].view(-1, 1)
+        if self.use_cnn:
+            out_cnn = self.cnn(observations['market_history'].permute(0, 2, 1))
+            out, (h_c, c_n) = self.lstm(out_cnn.permute(0, 2, 1))
+        else:
+            out, (h_c, c_n) = self.lstm(observations['market_history'])
+
+        out_portfolio_state = self.relu(self.mlp_portfolio(observations['portfolio_state']))  # shape(
         combined_features = torch.cat((h_c[-1], out_portfolio_state), dim=1)
         return combined_features
 
 
 
 
-def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, batch_first=True,
+def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True,
               learning_rate=0.001, n_steps=2048, batch_size=50, n_epochs=10):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -67,7 +96,9 @@ def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, batch_first=True,
         features_extractor_kwargs=dict(
                                        hidden_size_lstm=hidden_size_lstm,
                                        num_layers_lstm=num_layers_lstm,
-                                       batch_first=batch_first)
+                                       lstm_dropout=dropout_lstm,
+                                       batch_first=batch_first,
+                                       use_cnn=use_cnn)
     )
 
     model = PPO("MultiInputPolicy", env,

@@ -24,8 +24,8 @@ n_steps           = config.getint('MODEL', 'N_STEPS')
 batch_size        = config.getint('MODEL', 'BATCH_SIZE')
 n_epochs          = config.getint('MODEL', 'N_EPOCHS')
 total_timesteps   = config.getint('MODEL', 'TOTAL_TIMESTEPS')
-seed            = config.getint('MODEL', 'SEED')
-
+seed              = config.getint('MODEL', 'SEED')
+num_cpu           = config.getint('MODEL', 'NUM_CPU')
 # Configuration parameters for the environment
 stocks      = config.get('ENV','STOCKS').split(',')
 window_size = config.getint('ENV', 'WINDOW_SIZE')
@@ -53,7 +53,6 @@ def seed_everything(seed: int):
         torch.backends.cudnn.benchmark = False
 
 def train():
-    num_cpu = 8
 
     vec_env = SubprocVecEnv([make_env(df_train, stocks, window_size, env_name) for _ in range(num_cpu)])
 

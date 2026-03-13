@@ -31,23 +31,29 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
                                 kernel_size=3,
                                 padding=1
                                 ),
+                torch.nn.BatchNorm1d(32),
                 torch.nn.ReLU(),
                 torch.nn.MaxPool1d(2),
+
                 # Layer 2
                 torch.nn.Conv1d(in_channels=32,
                                 out_channels=64,
                                 kernel_size=3,
                                 padding=1
                                 ),
+                torch.nn.BatchNorm1d(64),
                 torch.nn.ReLU(),
                 torch.nn.MaxPool1d(2),
+
                 # Layer 3
                 torch.nn.Conv1d(in_channels=64,
                                 out_channels=128,
                                 kernel_size=3,
                                 padding=1
                                 ),
+                torch.nn.BatchNorm1d(128),
                 torch.nn.ReLU(),
+                torch.nn.Dropout(lstm_dropout),
             )
             market_history_shape = 128
         else:

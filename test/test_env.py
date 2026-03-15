@@ -1,6 +1,7 @@
 import unittest
 
 import pandas as pd
+from scipy.optimize import check_grad
 
 from src.env import CustomEnv
 import numpy as np
@@ -124,3 +125,71 @@ class TestCustomEnv(unittest.TestCase):
         _, _, terminated, _, _ = self.env.step(action)
 
         self.assertTrue(terminated, "L'environnement devrait être terminé à l'index final.")
+
+    def test_get_weights_mpt_robustness(self):
+        """Teste la validité des poids et le fallback en cas d'erreur."""
+        self.env.current_step = 20
+
+        # 1. TEST DE VALIDITÉ : Action normale
+        action_valide = np.array([0.5, -0.2, 0.1, 0.8, -0.1])
+        weights = self.env._get_weights_from_action_mpt(action_valide)
+
+        # Vérifications
+        self.assertIsInstance(weights, np.ndarray, "Doit retourner un np.ndarray")
+        self.assertEqual(weights.shape, (5,), "La taille du vecteur doit être égale au nombre d'actifs")
+        self.assertAlmostEqual(np.sum(weights), 1.0, places=4, msg="La somme des poids doit être égale à 1")
+        self.assertTrue(np.all(weights >= 0),
+                        "Par défaut, Markowitz ne doit pas retourner de poids négatifs (Long-only)")
+
+        # 2. TEST DE RÉSILIENCE : Action avec NaN (simule un crash du réseau de neurones)
+        action_corrompue = np.array([np.nan, 1.0, 0.5, 0.2, 0.1])
+        weights_fallback = self.env._get_weights_from_action_mpt(action_corrompue)
+
+        # Vérification du Equal Weight (1/5 = 0.2)
+        expected_fallback = np.full(5, 0.2)
+        np.testing.assert_array_almost_equal(weights_fallback, expected_fallback,
+                                             err_msg="Le fallback doit être un Equal-Weight en cas d'erreur")
+
+    def test_pmpt_gradient(self):
+        # 1. Simulation de données (21 actifs, 60 jours)
+        np.random.seed(42)
+        num_assets = 21
+        window_size = 60
+
+        # On simule des rendements (returns) et des prédictions (mu)
+        global returns, mu  # Simule le contexte de ta classe
+        returns = np.random.normal(0.001, 0.02, (window_size, num_assets))
+        mu = np.random.normal(0.01, 0.05, num_assets)
+
+        # 2. Tes fonctions (version corrigée et vectorisée)
+        def objective_PMPT(weights, l=1.0, epsilon=1e-5):
+            port_return = weights @ mu
+            historical_port_return = returns @ weights
+            downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+            return -(port_return - l * downside_risk)
+
+        def jacobian_PMPT(weights, l=1.0, epsilon=1e-5):
+            historical_port_return = returns @ weights
+            downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+            grad_risk = (1 / (len(returns) * downside_risk)) * returns.T @ np.clip(historical_port_return, None, 0)
+            return -(mu - l * grad_risk)
+
+        # 3. Création de poids de test (doivent sommer à 1)
+        test_weights = np.random.dirichlet(np.ones(num_assets))
+
+        # 4. Calcul de l'erreur entre l'analytique et le numérique
+        # check_grad renvoie la norme L2 de la différence
+        error = check_grad(objective_PMPT, jacobian_PMPT, test_weights, 1.0, 1e-5)
+
+        print("--- Rapport de Test Unitaire : Borey-Alpha ---")
+        print(f"Erreur calculée : {error:.2e}")
+
+        # 5. Assertion (Seuil de tolérance standard : 1e-6)
+        if error < 1e-6:
+            print("SUCCÈS : Le Jacobien est mathématiquement correct.")
+        else:
+            print("ÉCHEC : Il y a une erreur dans la formule du gradient.")
+
+        # Vérification des dimensions (Crucial pour SLSQP)
+        grad_shape = jacobian_PMPT(test_weights).shape
+        print(f"Dimensions du gradient : {grad_shape} (Attendu : ({num_assets},))")

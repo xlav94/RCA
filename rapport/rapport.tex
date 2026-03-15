@@ -285,6 +285,27 @@ Preliminary results indicate that the agent progressively learns non-trivial all
 \subsection{Future Directions}
 
 Moving forward, we plan to enhance the system's performance and robustness through three primary avenues. First, we intend to explore \textbf{alternative Deep Reinforcement Learning (DRL) algorithms} to compare their stability and convergence against our current PPO baseline. Second, we will focus on \textbf{feature engineering}, incorporating stationary technical indicators and risk-adjusted metrics into the observation space to provide the agent with richer market context. Finally, we will conduct systematic \textbf{hyperparameter tuning} of the model architecture and training process to optimize for long-term Sharpe ratios and more effective risk management.
+
+\section{Allocation Optimization Formulations}
+$w$ = portfolio weights vector\\
+$\mu$ = expected returns vector (actions)\\
+$\Sigma$ = covariance matrix of returns\\
+$\lambda$ = risk aversion parameter\\
+$r_t$ = return vector at time t\\
+$N$ = number of sample observations\\
+$\epsilon$ = small constant to prevent division by zero\\
+$DR(w)$ = Downside Risk (Mean Semi-deviation) of the portfolio with weights $w$\\
+
+\textbf{Modern Portfolio Theory Mean-variance Optimization} \\
+Quadratic Utility Function:
+$-\left[ w^T \mu - \frac{1}{2} \lambda (w^T \Sigma w) \right]$ \\
+
+\textbf{Post Modern Porfolio Theory Mean Semi-deviation Optmization} \\
+Mean-Semideviation Utility Function:
+$-\left[ w^T \mu - \lambda \sqrt{\frac{1}{N} \sum_{t=1}^{N} \min(0, r_t^T w)^2 + \epsilon} \right]$ \\
+Jacobian for Mean Semi-deviation Utility:
+$-\left[ \mu - \lambda \frac{ \sum_{t=1}^{N} \min(0, r_t w) r_t}{N DR(w)} \right]$ \\
+\textit{Using de Jacobian for the optimization is 27\% faster than without it during the training process.}
 \newpage
 
 

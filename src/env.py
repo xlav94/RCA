@@ -1,7 +1,10 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from scipy.optimize import minimize
 from scipy.special import softmax
+from sklearn.covariance import LedoitWolf
+
 
 class CustomEnv(gym.Env):
     def __init__(self, df, stocks, window_size=50, initial_balance=10000, env_name='RCA'):
@@ -31,7 +34,6 @@ class CustomEnv(gym.Env):
                 shape=(self.num_assets,),  # Weights for Assets
                 dtype=np.float32
             ),
-            #"balance": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32)
         })
 
     def _get_observation(self) -> dict:
@@ -52,7 +54,7 @@ class CustomEnv(gym.Env):
         return self._get_observation(), {}
 
     def step(self, action : np.ndarray):
-        portfolio_weights = self._get_weights_from_action(action)
+        portfolio_weights = self._get_weights_from_action_mpt(action)
         portfolio_return, transaction_penality = self._calculate_reward(portfolio_weights)
         reward = portfolio_return - transaction_penality
         self.current_step += 1
@@ -75,6 +77,57 @@ class CustomEnv(gym.Env):
         diff = 1 - np.sum(rounded_weights)
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
+
+    def _get_weights_from_action_mpt(self, action, precision=3, lower_bound=0., upper_bound=0.10):
+        try:
+            if np.any(np.isnan(action)):
+                raise ValueError("Action contient des NaN")
+
+            prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
+            returns = prices.pct_change().dropna()
+
+            lw = LedoitWolf().fit(returns)
+            cov_matrix = lw.covariance_
+            mu = action
+
+            num_assets = self.num_assets
+            constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
+            bounds = tuple((lower_bound, upper_bound) for _ in range(num_assets))
+
+            def objective_MPT(weights, l=2.0):
+                port_return = np.dot(weights, mu)
+                port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
+                return -(port_return - port_risk)
+
+            def objective_PMPT(weights, l=1.0, epsilon=1e-5):
+                port_return = weights @ mu
+                historical_port_return = returns @ weights
+                downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+                return -(port_return - l * downside_risk)
+
+            def jacobian_PMPT(weights, l=1.0, epsilon=1e-5):
+                historical_port_return = returns @ weights
+                downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+                grad_risk = (1 / (len(returns) * downside_risk)) * returns.T @ np.clip(historical_port_return, None, 0)
+                return -(mu - l * grad_risk)
+
+            initial_weights = np.full(num_assets, 1 / num_assets)
+
+            result = minimize(objective_PMPT, initial_weights, method='SLSQP',
+                              bounds=bounds, constraints=constraints,
+                              jac=jacobian_PMPT,
+                              options={'ftol': 1e-7, 'maxiter': 100})
+
+            weights = result.x
+            weights = np.round(weights, decimals=precision)
+            diff = 1.0 - np.sum(weights)
+            weights[weights.argmax()] += diff
+
+        except Exception as e:
+            print(f"Error in MPT optimization: {e}")
+            weights = np.full(self.num_assets, 1 / self.num_assets)
+
+        return weights
 
     def _calculate_reward(self, portfolio_weights, penality_factor=0.0003):
         # On calcule le rendement quotidien du portefeuille en utilisant les poids et les rendements des actifs

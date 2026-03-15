@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:1
-#SBATCH --time=03:00:00
+#SBATCH --time=13:00:00
 #SBATCH --output=/home/cedric/scratch/logs/slurm-%j-%x.out
 #SBATCH --error=/home/cedric/scratch/logs/slurm-%j-%x.error
 
@@ -20,7 +20,7 @@ echo "Contenu du dossier actuel ($(pwd)) :"
 ls -F  # Ceci affichera la liste des fichiers pour confirmer la présence de main.py
 
 echo -e "\nSetting up Python environment..."
-module load python/3.11
+module load python/3.13
 export PYTHONUNBUFFERED=1
 
 # On crée le venv

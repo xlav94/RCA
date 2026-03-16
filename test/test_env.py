@@ -13,7 +13,7 @@ class TestCustomEnv(unittest.TestCase):
         data = np.random.uniform(100, 200, (100, 5))
         self.df = pd.DataFrame(data, columns=[f'Stock_{i}' for i in range(5)])
         self.window_size = 10
-        self.env = CustomEnv(self.df, self.df.columns,window_size=self.window_size)
+        self.env = CustomEnv(self.df, self.df.columns, "PMPT", window_size=self.window_size)
 
     def test_reset_shapes(self):
         """Verify reset returns the correct dictionary structure and shapes."""
@@ -81,7 +81,7 @@ class TestCustomEnv(unittest.TestCase):
             'Asset_2': [100, 90]
         }
         df = pd.DataFrame(data)
-        env = CustomEnv(df, np.array(['Asset_1', 'Asset_2']), window_size=1)
+        env = CustomEnv(df, np.array(['Asset_1', 'Asset_2']), "PMPT", window_size=1)
 
         weights_equal = np.array([0.5, 0.5])
         reward_a = env._calculate_reward(weights_equal)

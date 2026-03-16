@@ -1,5 +1,8 @@
+import configparser
+from datetime import datetime
+
 import torch
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from gymnasium import spaces
 
@@ -89,10 +92,37 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         return combined_features
 
 
+config = configparser.ConfigParser()
+config.read('config.ini')
 
+def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True):
 
-def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True,
-              learning_rate=0.001, n_steps=2048, batch_size=50, n_epochs=10):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device : {device}")
+
+    policy_kwargs = dict(
+        features_extractor_class=CustomCombinedExtractor,
+        features_extractor_kwargs=dict(
+                                       hidden_size_lstm=hidden_size_lstm,
+                                       num_layers_lstm=num_layers_lstm,
+                                       lstm_dropout=dropout_lstm,
+                                       batch_first=batch_first,
+                                       use_cnn=use_cnn)
+    )
+
+    model = PPO("MultiInputPolicy", env,
+                learning_rate=config.getfloat('PPO', 'LEARNING_RATE'),
+                n_steps=config.getint('PPO', 'N_STEPS'),
+                batch_size=config.getint('PPO', 'BATCH_SIZE'),
+                n_epochs=config.getint('PPO', 'N_EPOCHS'),
+                policy_kwargs=policy_kwargs,
+                verbose=1,
+                tensorboard_log=f"./tensorboard_logs/PPO_{datetime.now().strftime('%Y-%m-%d-%H:%M')}",
+                device=device
+                )
+    return model
+
+def get_agent_sac(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"L'agent s'entraînera sur : {device}")
@@ -107,14 +137,14 @@ def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_
                                        use_cnn=use_cnn)
     )
 
-    model = PPO("MultiInputPolicy", env,
-                learning_rate=learning_rate,
-                n_steps=n_steps,
-                batch_size=batch_size,
-                n_epochs=n_epochs,
+    model = SAC("MultiInputPolicy", env,
+                learning_rate=config.getfloat('SAC', 'LEARNING_RATE'),
+                batch_size=config.getint('SAC', 'BATCH_SIZE'),
+                buffer_size=config.getint('SAC', 'BUFFER_SIZE'),
+                gradient_steps=config.getint('SAC', 'GRADIENT_STEPS'),
                 policy_kwargs=policy_kwargs,
                 verbose=1,
-                tensorboard_log="./tensorboard_logs/",
+                tensorboard_log=f"./tensorboard_logs/SAC_{datetime.now().strftime('%Y-%m-%d-%H:%M')}",
                 device=device
                 )
     return model

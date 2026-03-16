@@ -7,10 +7,11 @@ from sklearn.covariance import LedoitWolf
 
 
 class CustomEnv(gym.Env):
-    def __init__(self, df, stocks, window_size=50, initial_balance=10000, env_name='RCA'):
+    def __init__(self, df, stocks, objective : str, window_size=50, initial_balance=10000, env_name='RCA'):
         self.stocks = stocks
         self.current_step = window_size
         self.df = df
+        self.objective = objective
         self.window_size = window_size
         self.initial_balance = float(initial_balance)
         self.env_name = env_name
@@ -113,10 +114,16 @@ class CustomEnv(gym.Env):
 
             initial_weights = np.full(num_assets, 1 / num_assets)
 
-            result = minimize(objective_PMPT, initial_weights, method='SLSQP',
-                              bounds=bounds, constraints=constraints,
-                              jac=jacobian_PMPT,
-                              options={'ftol': 1e-7, 'maxiter': 100})
+            result = None
+            if self.objective == "MPT":
+                result = minimize(objective_MPT, initial_weights, method='SLSQP',
+                                  bounds=bounds, constraints=constraints,
+                                  options={'ftol': 1e-7, 'maxiter': 100})
+            elif self.objective == "PMPT":
+                result = minimize(objective_PMPT, initial_weights, method='SLSQP',
+                                  bounds=bounds, constraints=constraints,
+                                  jac=jacobian_PMPT,
+                                  options={'ftol': 1e-7, 'maxiter': 100})
 
             weights = result.x
             weights = np.round(weights, decimals=precision)

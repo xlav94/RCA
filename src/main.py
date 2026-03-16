@@ -59,6 +59,7 @@ def train(algo):
 
     # Train the model
     if algo == 'PPO':
+        print("PPO selected for training.")
         model = get_agent_ppo(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm)
 
         model.learn(progress_bar=True,
@@ -67,6 +68,7 @@ def train(algo):
         model.save(f'models/ppo_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
     elif algo == 'SAC':
+        print("SAC selected for training.")
         model = get_agent_sac(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm)
 
         model.learn(progress_bar=True,
@@ -119,6 +121,6 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    seed_everything(seed)
-    test(seed)
-    #train()
+    #seed_everything(seed)
+    #test(seed)
+    train("SAC") # SAC or PPO

@@ -78,7 +78,7 @@ class CustomEnv(gym.Env):
         rounded_weights[rounded_weights.argmax()] += diff
         return rounded_weights
 
-    def _get_weights_from_action_mpt(self, action, precision=3, lower_bound=0., upper_bound=0.10):
+    def _get_weights_from_action_mpt(self, action, precision=3, lower_bound=0.05, upper_bound=0.50):
         try:
             if np.any(np.isnan(action)):
                 raise ValueError("Action contient des NaN")
@@ -113,9 +113,8 @@ class CustomEnv(gym.Env):
 
             initial_weights = np.full(num_assets, 1 / num_assets)
 
-            result = minimize(objective_PMPT, initial_weights, method='SLSQP',
+            result = minimize(objective_MPT, initial_weights, method='SLSQP',
                               bounds=bounds, constraints=constraints,
-                              jac=jacobian_PMPT,
                               options={'ftol': 1e-7, 'maxiter': 100})
 
             weights = result.x

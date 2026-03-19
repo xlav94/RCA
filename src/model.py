@@ -1,3 +1,5 @@
+from typing import Callable
+
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -89,7 +91,11 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         return combined_features
 
 
+def linear_schedule(initial_value: float) -> Callable[[float], float]:
+    def func(progress_remaining: float) -> float:
+        return progress_remaining * initial_value
 
+    return func
 
 def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True,
               learning_rate=0.001, n_steps=2048, batch_size=50, n_epochs=10):
@@ -108,7 +114,7 @@ def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_
     )
 
     model = PPO("MultiInputPolicy", env,
-                learning_rate=learning_rate,
+                learning_rate=linear_schedule(learning_rate),
                 n_steps=n_steps,
                 batch_size=batch_size,
                 n_epochs=n_epochs,

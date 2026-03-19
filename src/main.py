@@ -96,7 +96,8 @@ def test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = SAC.load('models/sac_agent_1000000_2026-03-16-23:18.zip', env=env_test, device=device)
+    model = PPO.load('models/PPO_agent_20000000_steps.zip', env=env_test, device=device)
+    # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)
     done = False
@@ -136,6 +137,6 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    #seed_everything(seed)
-    #test(seed)
-    train("PPO") # SAC or PPO
+    seed_everything(seed)
+    test(seed)
+    #train("PPO") # SAC or PPO

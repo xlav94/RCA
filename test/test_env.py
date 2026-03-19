@@ -5,8 +5,10 @@ import jax.numpy as jnp
 import pandas as pd
 from scipy.optimize import check_grad, minimize
 
-from src.env import CustomEnv, minimize_jax, objective_PMPT_jax
+from src.env import CustomEnv
 import numpy as np
+
+from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax
 
 
 class TestCustomEnv(unittest.TestCase):
@@ -200,11 +202,12 @@ class TestCustomEnv(unittest.TestCase):
         np.random.seed(42)
         num_assets = 21
         window_size = 60
-
-        returns = np.random.normal(0.0005, 0.01, (window_size, num_assets))
+        data = np.random.normal(0.0005, 0.01, (window_size, num_assets))
+        stocks = [f"STK_{i}" for i in range(num_assets)]
+        returns = pd.DataFrame(data, columns=stocks)
         mu = np.random.normal(0.01, 0.02, num_assets)
 
-        low_b, up_b = 0.0, 0.15  # Bornes individuelles
+        low_b, up_b = 0.0, 0.10
 
         initial_weights = np.full(num_assets, 1 / num_assets)
 
@@ -236,15 +239,13 @@ class TestCustomEnv(unittest.TestCase):
         weights_scipy = res_scipy.x
 
         ########## JAX ##########
-        weights_jax_raw = minimize_jax(
-            objective_PMPT_jax,
-            jnp.array(initial_weights),
-            jnp.array(mu),
-            jnp.array(returns),
-            lower_bound=low_b,
-            upper_bound=up_b
+        po = PortfolioOptimizer(lower_bound=low_b, upper_bound=up_b)
+        weights_jax = po.minimize(
+            objective_pmpt_jax,
+            initial_weights,
+            mu,
+            returns
         )
-        weights_jax = np.array(weights_jax_raw)
 
         sum_scipy = np.sum(weights_scipy)
         sum_jax = np.sum(weights_jax)
@@ -272,11 +273,19 @@ class TestCustomEnv(unittest.TestCase):
                          jac=jacobian_PMPT)
         print(f"Mean time for SciPy : {(time.time() - start) / 10:.4f}s")
 
-        _ = minimize_jax(objective_PMPT_jax, jnp.array(initial_weights), jnp.array(mu), jnp.array(returns), low_b,
-                         up_b)
+        _ = po.minimize(
+            objective_pmpt_jax,
+            initial_weights,
+            mu,
+            returns
+        )
 
         start = time.time()
         for _ in range(10):
-            _ = minimize_jax(objective_PMPT_jax, jnp.array(initial_weights), jnp.array(mu), jnp.array(returns),
-                             low_b, up_b)
+            _ = po.minimize(
+            objective_pmpt_jax,
+            initial_weights,
+            mu,
+            returns
+        )
         print(f"Mean time for JAX : {(time.time() - start) / 10:.4f}s")

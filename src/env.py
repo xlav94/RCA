@@ -1,10 +1,47 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from jax import jit, grad
+import jax.numpy as jnp
+from jaxopt import ProjectedGradient
+from jaxopt.projection import projection_box_section
 from scipy.optimize import minimize
 from scipy.special import softmax
 from sklearn.covariance import LedoitWolf
 
+@jit
+def objective_MPT_jax(weights, mu, cov_matrix, l=2.0):
+    port_return = jnp.dot(weights, mu)
+    port_risk = 0.5 * l * jnp.dot(weights.T, jnp.dot(cov_matrix, weights))
+    return -(port_return - port_risk)
+
+@jit
+def objective_PMPT_jax(weights, mu, returns, l=1.0, epsilon=1e-5):
+    port_return = jnp.dot(weights, mu)
+    historical_port_return = jnp.dot(returns, weights)
+    downside_risk = jnp.sqrt(jnp.mean(jnp.minimum(0, historical_port_return) ** 2) + epsilon)
+    return -(port_return - l * downside_risk)
+
+@jit(static_argnames=['objective'])
+def minimize_jax(objective, initial_weights, mu, returns, lower_bound=0., upper_bound=0.10):
+    low = jnp.full_like(initial_weights, lower_bound)
+    high = jnp.full_like(initial_weights, upper_bound)
+    w_coeffs = jnp.ones_like(initial_weights)
+    c_target = 1.0
+    my_hyperparams = (low, high, w_coeffs, c_target)
+
+    def projection_box_section_custom(x, _unused_hyperparams=None):
+        return projection_box_section(x, my_hyperparams, check_feasible=False)
+
+    pg = ProjectedGradient(fun=objective,
+                           projection=projection_box_section_custom,
+                           stepsize=0.1,
+                           maxiter=500,
+                           tol=1e-9)
+
+    return pg.run(initial_weights,
+            mu=mu,
+            returns=returns).params
 
 class CustomEnv(gym.Env):
     def __init__(self, df, stocks, objective : str, window_size=50, initial_balance=10000, env_name='RCA'):
@@ -90,8 +127,16 @@ class CustomEnv(gym.Env):
             lw = LedoitWolf().fit(returns)
             cov_matrix = lw.covariance_
             mu = action
-
             num_assets = self.num_assets
+            initial_weights = np.full(num_assets, 1 / num_assets)
+
+            ###### JAX #######
+
+            returns_jax = jnp.array(returns.values)
+            mu_jax = jnp.array(mu)
+            initial_weights_jax = jnp.array(initial_weights)
+
+            ##################
             constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
             bounds = tuple((lower_bound, upper_bound) for _ in range(num_assets))
 
@@ -100,6 +145,7 @@ class CustomEnv(gym.Env):
                 port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
                 return -(port_return - port_risk)
 
+            """
             def objective_PMPT(weights, l=1.0, epsilon=1e-5):
                 port_return = weights @ mu
                 historical_port_return = returns @ weights
@@ -111,8 +157,7 @@ class CustomEnv(gym.Env):
                 downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
                 grad_risk = (1 / (len(returns) * downside_risk)) * returns.T @ np.clip(historical_port_return, None, 0)
                 return -(mu - l * grad_risk)
-
-            initial_weights = np.full(num_assets, 1 / num_assets)
+            """
 
             result = None
             if self.objective == "MPT":
@@ -120,12 +165,21 @@ class CustomEnv(gym.Env):
                                   bounds=bounds, constraints=constraints,
                                   options={'ftol': 1e-7, 'maxiter': 100})
             elif self.objective == "PMPT":
+                """
                 result = minimize(objective_PMPT, initial_weights, method='SLSQP',
                                   bounds=bounds, constraints=constraints,
                                   jac=jacobian_PMPT,
                                   options={'ftol': 1e-7, 'maxiter': 100})
+                """
+                result = minimize_jax(objective_PMPT_jax,
+                                      initial_weights_jax,
+                                      mu_jax,
+                                      returns_jax,
+                                      lower_bound,
+                                      upper_bound) #Jax
 
-            weights = result.x
+            weights = np.array(result) # Jax
+            #weights = result.x
             weights = np.round(weights, decimals=precision)
             diff = 1.0 - np.sum(weights)
             weights[weights.argmax()] += diff

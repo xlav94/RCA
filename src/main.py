@@ -96,7 +96,7 @@ def test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/PPO_agent_20000000_steps.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
     # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)
@@ -110,6 +110,7 @@ def test(seed: int):
     total_cum_return_hold = 1.0
     writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H:%M')}")
     step = 0
+    step_daily_return = window_size
 
     while not done:
         action, _states = model.predict(obs, deterministic=True)
@@ -117,7 +118,7 @@ def test(seed: int):
 
         total_cumulative_return *= (1 + float(reward))
 
-        daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step].mean()
+        daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step_daily_return].mean()
         total_cum_return_hold *= (1 + daily_market_return)
         writer.add_scalars("Comparison/Cumulative_Return", {
             "Agent_PPO": total_cumulative_return - 1,
@@ -130,6 +131,7 @@ def test(seed: int):
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
         step += 1
+        step_daily_return += 1
         done = terminated or truncated
 
     writer.close()

@@ -12,6 +12,7 @@ import plotly.express as px
 import torch
 from setuptools.sandbox import save_path
 from stable_baselines3 import PPO
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 from src.data import DataPipeline
 from src.env import CustomEnv
@@ -36,6 +37,35 @@ def load_config(config_path: str = "/config.ini"):
 
     return model_cfg, env_cfg
 
+def extract_weights_from_subdirs(parent_dir):
+    all_assets_data = {}
+
+    # On parcourt chaque sous-dossier dans le répertoire parent
+    for folder in os.listdir(parent_dir):
+        folder_path = os.path.join(parent_dir, folder)
+
+        # On ne traite que les dossiers qui concernent l'allocation
+        if os.path.isdir(folder_path) and "Allocation_Portfolio_Weights" in folder:
+            asset_name = folder.split('_')[-1]  # Récupère le nom (ex: AMZN)
+
+            # Charger l'accumulateur pour ce dossier spécifique
+            event_acc = EventAccumulator(folder_path)
+            event_acc.Reload()
+
+            # Dans ces sous-dossiers, le tag est souvent simplifié
+            # On cherche le tag de scalaire disponible
+            tags = event_acc.Tags()['scalars']
+            if tags:
+                tag = tags[0]  # Généralement il n'y en a qu'un par dossier
+                scalars = event_acc.Scalars(tag)
+                steps = [e.step for e in scalars]
+                values = [e.value for e in scalars]
+
+                all_assets_data[asset_name] = pd.Series(values, index=steps)
+
+    df = pd.DataFrame(all_assets_data)
+    df.index.name = 'step'
+    return df
 
 def run_backtest(model_path: str, df_test: pd.DataFrame, stocks: list[str], window_size: int, env_name: str):
     """
@@ -471,12 +501,13 @@ def plot_risk_return_scatter(results_df, df_test, stocks, window_size, save_path
     return scatter_df
 
 def main():
+
     model_cfg, env_cfg = load_config("../config.ini")
 
     stocks = env_cfg["stocks"]
     window_size = env_cfg["window_size"]
     env_name = env_cfg["env_name"]
-
+    '''
     # Mets ici le chemin de ton modèle
     model_path = "../models/ppo_agent_PMPT_10M.zip"
 
@@ -496,7 +527,12 @@ def main():
         stocks=stocks,
         window_size=window_size,
         env_name=env_name
-    )
+    )'''
+
+    log_path = "../tensorboard_logs/test_results_PMPT_10M/"
+    df_weights = extract_weights_from_subdirs(log_path)
+    top_assets = df_weights.mean().sort_values(ascending=True).index
+    results_df = df_weights[top_assets]
 
     os.makedirs("plots", exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -538,7 +574,7 @@ def main():
         results_df,
         save_path=f"plots/cumulative_transaction_cost_{timestamp}.png"
     )
-
+    '''
     scatter_df = plot_risk_return_scatter(
         results_df,
         df_test=df_test,
@@ -548,7 +584,7 @@ def main():
     )
 
     scatter_df.to_csv(f"plots/risk_return_scatter_{timestamp}.csv", index=False)
-
+    '''
     final_agent_return = results_df["agent_cumulative_return"].iloc[-1] * 100
     final_benchmark_return = results_df["benchmark_cumulative_return"].iloc[-1] * 100
 

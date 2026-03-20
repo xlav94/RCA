@@ -115,6 +115,6 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    #seed_everything(seed)
-    #test(seed)
-    train()
+    seed_everything(seed)
+    test(seed)
+    #train()

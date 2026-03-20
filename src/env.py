@@ -5,17 +5,21 @@ from scipy.optimize import minimize
 from scipy.special import softmax
 from sklearn.covariance import LedoitWolf
 
+from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax
+
 
 class CustomEnv(gym.Env):
-    def __init__(self, df, stocks, window_size=50, initial_balance=10000, env_name='RCA'):
+    def __init__(self, df, stocks, objective : str, window_size=50, initial_balance=10000, env_name='RCA'):
         self.stocks = stocks
         self.current_step = window_size
         self.df = df
+        self.objective = objective
         self.window_size = window_size
         self.initial_balance = float(initial_balance)
         self.env_name = env_name
         self.num_assets = len(stocks)
         self.weights = np.full(self.num_assets, 1 / self.num_assets)
+        self.po = PortfolioOptimizer(lower_bound=0., upper_bound=0.10)
 
         self.action_space = spaces.Box(low=-1.0,
                                      high=1.0,
@@ -89,8 +93,9 @@ class CustomEnv(gym.Env):
             lw = LedoitWolf().fit(returns)
             cov_matrix = lw.covariance_
             mu = action
-
             num_assets = self.num_assets
+            initial_weights = np.full(num_assets, 1 / num_assets)
+
             constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
             bounds = tuple((lower_bound, upper_bound) for _ in range(num_assets))
 
@@ -99,26 +104,19 @@ class CustomEnv(gym.Env):
                 port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
                 return -(port_return - port_risk)
 
-            def objective_PMPT(weights, l=1.0, epsilon=1e-5):
-                port_return = weights @ mu
-                historical_port_return = returns @ weights
-                downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
-                return -(port_return - l * downside_risk)
+            weights = None
 
-            def jacobian_PMPT(weights, l=1.0, epsilon=1e-5):
-                historical_port_return = returns @ weights
-                downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
-                grad_risk = (1 / (len(returns) * downside_risk)) * returns.T @ np.clip(historical_port_return, None, 0)
-                return -(mu - l * grad_risk)
+            if self.objective == "MPT":
+                result = minimize(objective_MPT, initial_weights, method='SLSQP',
+                                  bounds=bounds, constraints=constraints,
+                                  options={'ftol': 1e-7, 'maxiter': 100})
+                weights = result.x
+            elif self.objective == "PMPT":
+                weights = self.po.minimize(objective_pmpt_jax,
+                                      initial_weights,
+                                      mu,
+                                      returns)
 
-            initial_weights = np.full(num_assets, 1 / num_assets)
-
-            result = minimize(objective_PMPT, initial_weights, method='SLSQP',
-                              bounds=bounds, constraints=constraints,
-                              jac=jacobian_PMPT,
-                              options={'ftol': 1e-7, 'maxiter': 100})
-
-            weights = result.x
             weights = np.round(weights, decimals=precision)
             diff = 1.0 - np.sum(weights)
             weights[weights.argmax()] += diff
@@ -150,3 +148,22 @@ class CustomEnv(gym.Env):
     def close(self):
         return
 
+
+"""
+def objective_PMPT(weights, l=1.0, epsilon=1e-5):
+    port_return = weights @ mu
+    historical_port_return = returns @ weights
+    downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+    return -(port_return - l * downside_risk)
+
+def jacobian_PMPT(weights, l=1.0, epsilon=1e-5):
+    historical_port_return = returns @ weights
+    downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+    grad_risk = (1 / (len(returns) * downside_risk)) * returns.T @ np.clip(historical_port_return, None, 0)
+    return -(mu - l * grad_risk)
+
+result = minimize(objective_PMPT, initial_weights, method='SLSQP',
+                  bounds=bounds, constraints=constraints,
+                  jac=jacobian_PMPT,
+                  options={'ftol': 1e-7, 'maxiter': 100})
+"""

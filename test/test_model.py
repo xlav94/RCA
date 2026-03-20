@@ -5,7 +5,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 
 from src.env import CustomEnv
-from src.model import CustomCombinedExtractor, get_agent
+from src.model import CustomCombinedExtractor, get_agent_ppo, get_agent_sac
 import numpy as np
 import torch
 from gymnasium import spaces
@@ -21,7 +21,7 @@ class TestCustomCombinedExtractor(unittest.TestCase):
             'portfolio_state': spaces.Box(low=0, high=1, shape=(3,), dtype=np.float32),
         })
         self.df = pd.DataFrame(np.random.rand(100, 5), columns=[f'Stock_{i}' for i in range(5)])
-        self.env = CustomEnv(self.df, self.df.columns, window_size=10)
+        self.env = CustomEnv(self.df, self.df.columns, "PMPT", window_size=10)
 
     def test_forward_pass(self):
         extractor = CustomCombinedExtractor(observation_space=self.observation_space,
@@ -121,7 +121,19 @@ class TestCustomCombinedExtractor(unittest.TestCase):
 
     def test_training_start_with_cnn(self):
         """Vérifie que le modèle peut effectuer quelques étapes d'apprentissage (Backprop)."""
-        model = get_agent(self.env, hidden_size_lstm=self.hidden_size, use_cnn=True, n_steps=128, batch_size=64)
+        model = get_agent_ppo(self.env, hidden_size_lstm=self.hidden_size, use_cnn=True)
+
+        try:
+            model.learn(total_timesteps=200)
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Erreur lors de l'apprentissage: {e}")
+
+        self.assertTrue(success, "Le modèle n'a pas pu effectuer son cycle d'apprentissage.")
+
+    def test_sac_model(self):
+        model = get_agent_sac(self.env, hidden_size_lstm=self.hidden_size, use_cnn=False)
 
         try:
             model.learn(total_timesteps=200)

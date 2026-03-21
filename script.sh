@@ -19,6 +19,12 @@ cd "$SLURM_TMPDIR/RCA"
 echo "Contenu du dossier actuel ($(pwd)) :"
 ls -F  # Ceci affichera la liste des fichiers pour confirmer la présence de main.py
 
+# When using jax[cuda12]
+# export XLA_PYTHON_CLIENT_PREALLOCATE=false
+# module load StdEnv/2023
+# module load cudacore/.12.9.1
+# module load cudnn
+
 echo -e "\nSetting up Python environment..."
 module load python/3.13
 export PYTHONUNBUFFERED=1

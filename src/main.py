@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 import random
 import numpy as np
+import pandas as pd
 
 import torch
 from stable_baselines3 import PPO, SAC
@@ -35,7 +36,7 @@ objective   = config.get('ENV', 'OBJECTIVE')
 df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28').get_env_data(feature='Open')
 train_size = int(len(df) * 0.8)
 df_train = df.iloc[:train_size]
-df_test = df.iloc[train_size:]
+df_test = pd.concat([df_train.tail(window_size), df.iloc[train_size:]])
 
 def make_env(df_env, stocks_env, objective_env, window_size_env, env_name_env):
     def _init():
@@ -53,7 +54,7 @@ def seed_everything(seed_init: int):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-def train(algo):
+def train(algo, train_seed=None):
 
     vec_env = SubprocVecEnv([make_env(df_train, stocks, objective, window_size, env_name) for _ in range(num_cpu)])
 
@@ -62,7 +63,7 @@ def train(algo):
     if checkpoint:
         checkpoint_dir = f"models/{algo}_agent_checkpoints_{datetime.now().strftime('%Y-%m-%d-%H:%M')}/"
         checkpoint_callback = CheckpointCallback(
-            save_freq=max(1, 1_000_000 // num_cpu),
+            save_freq=max(1, 2_000_000 // num_cpu),
             save_path=checkpoint_dir,
             name_prefix=f"{algo}_agent",
             save_replay_buffer=True,
@@ -73,7 +74,7 @@ def train(algo):
     # Train the model
     if algo == 'PPO':
         print("PPO selected for training.")
-        model = get_agent_ppo(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm)
+        model = get_agent_ppo(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm, seed=train_seed)
 
         model.learn(progress_bar=True,
                     total_timesteps=total_timesteps,
@@ -96,7 +97,7 @@ def test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
+    model = PPO.load('models/PPO_agent_checkpoints_2026-03-20-18:32/PPO_agent_30000000_steps.zip', env=env_test, device=device)
     # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)

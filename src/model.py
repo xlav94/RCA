@@ -95,7 +95,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True):
+def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True, seed=None):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device : {device}")
@@ -118,7 +118,8 @@ def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
                 policy_kwargs=policy_kwargs,
                 verbose=1,
                 tensorboard_log=f"./tensorboard_logs/PPO_{datetime.now().strftime('%Y-%m-%d-%H:%M')}",
-                device=device
+                device=device,
+                seed=seed
                 )
     return model
 

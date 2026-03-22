@@ -7,10 +7,11 @@ from sklearn.covariance import LedoitWolf
 
 
 class CustomEnv(gym.Env):
-    def __init__(self, df, stocks, objective : str, window_size=50, initial_balance=10000, env_name='RCA'):
+    def __init__(self, df, stocks, objective : str, window_size=50, initial_balance=10000, env_name='RCA', df_features=None):
         self.stocks = stocks
         self.current_step = window_size
         self.df = df
+        self.df_features = df_features
         self.objective = objective
         self.window_size = window_size
         self.initial_balance = float(initial_balance)
@@ -23,16 +24,18 @@ class CustomEnv(gym.Env):
                                      shape=(self.num_assets,),
                                     dtype=np.float32)
 
+        num_extra = len(df_features.columns) if df_features is not None else 0
+
         # Observation: A window of technical indicators
         self.observation_space = spaces.Dict({
             "market_history": spaces.Box(
                 low=-np.inf, high=np.inf,
-                shape=(window_size, len(df.columns)),
+                shape=(window_size, len(df.columns) + num_extra),  # ← only change
                 dtype=np.float32
             ),
             "portfolio_state": spaces.Box(
                 low=0, high=1,
-                shape=(self.num_assets,),  # Weights for Assets
+                shape=(self.num_assets,),
                 dtype=np.float32
             ),
         })
@@ -41,10 +44,15 @@ class CustomEnv(gym.Env):
         # Slice the dataframe for the LSTM
         history_window = self.df.iloc[self.current_step - self.window_size: self.current_step].values
 
+        if self.df_features is not None:
+            features_window = self.df_features.iloc[
+                self.current_step - self.window_size: self.current_step
+            ].values
+            history_window = np.concatenate([history_window, features_window], axis=1)
+
         return {
             "market_history": history_window.astype(np.float32),
             "portfolio_state": self.weights.astype(np.float32),
-            #"balance": np.array([self.balance], dtype=np.float32)
         }
 
     def reset(self, seed=None, options=None) -> tuple[dict, dict]:

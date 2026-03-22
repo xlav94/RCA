@@ -5,6 +5,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from typing import List, Tuple
 from sklearn.preprocessing import StandardScaler
+import pywt
 
 
 class DataDownloader:
@@ -143,6 +144,50 @@ class DataPreprocessor:
 
         return env_df
 
+    def add_fracdiff(self, d: float = 0.4, window: int = 50) -> "DataPreprocessor":
+        weights = [1.0]
+        for k in range(1, window):
+            weights.append(-weights[-1] * (d - k + 1) / k)
+        weights = np.array(weights)  # no need to reverse for np.convolve
+
+        for ticker in self.tickers:
+            col = f"Open_{ticker}"
+            if col not in self.df.columns:
+                continue
+            series = self.df[col].values.astype(float)
+            # 'valid' mode naturally produces NaNs for the first (window-1) rows
+            convolved = np.convolve(series, weights, mode='full')[:len(series)].copy()
+            convolved[:window - 1] = np.nan
+            self.df[f"FracDiff_{ticker}"] = convolved
+
+        return self
+
+    def add_wavelet_denoise(self, wavelet: str = "db4", level: int = 1) -> "DataPreprocessor":
+        for ticker in self.tickers:
+            open_col = f"Open_{ticker}"
+            if open_col not in self.df.columns:
+                continue
+
+            raw_returns = self.df[open_col].pct_change().fillna(0).values.copy()  # ← .copy() here
+
+            coeffs = pywt.wavedec(raw_returns, wavelet, level=level)
+            sigma = np.median(np.abs(coeffs[-1])) / 0.6745
+            coeffs[1:] = [pywt.threshold(c, sigma, mode="soft") for c in coeffs[1:]]
+            denoised = pywt.waverec(coeffs, wavelet)[:len(raw_returns)]
+
+            self.df[f"WaveletReturn_{ticker}"] = denoised
+        return self
+
+    def get_features_data(self) -> pd.DataFrame:
+        """Returns only the engineered feature columns (FracDiff + WaveletReturn)."""
+        feature_cols = [
+            c for c in self.df.columns
+            if c.startswith("FracDiff_") or c.startswith("WaveletReturn_")
+        ]
+        df_feat = self.df[feature_cols].copy()
+        df_feat.dropna(inplace=True)
+        return df_feat
+
 
 class DataPipeline:
     """
@@ -167,3 +212,12 @@ class DataPipeline:
         clean_df = preprocessor.get_env_ready_data(feature=feature)
 
         return clean_df
+
+    def get_features_data(self, d: float = 0.4, fracdiff_window: int = 50) -> pd.DataFrame:
+        """Builds the feature-engineered df (FracDiff + WaveletReturn) from the same raw data."""
+        downloader = DataDownloader(self.tickers, self.start_date, self.end_date, self.data_path)
+        raw_df = downloader.fetch_data()
+        preprocessor = DataPreprocessor(raw_df, self.tickers)
+        preprocessor.add_fracdiff(d=d, window=fracdiff_window)
+        preprocessor.add_wavelet_denoise()
+        return preprocessor.get_features_data()

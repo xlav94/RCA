@@ -60,7 +60,7 @@ class CustomEnv(gym.Env):
     def step(self, action : np.ndarray):
         portfolio_weights = self._get_weights_from_action_mpt(action)
         portfolio_return, transaction_penality, downside_penalty, log_returns = self._calculate_reward(portfolio_weights)
-        reward = log_returns - transaction_penality - downside_penalty
+        reward = log_returns - transaction_penality
         self.current_step += 1
         self.weights = portfolio_weights
 
@@ -145,7 +145,7 @@ class CustomEnv(gym.Env):
         else:
             weight_change = np.sum(np.abs(portfolio_weights - self.weights)) #L1 norm
             transaction_penality = weight_change * penality_factor
-        return portfolio_return, transaction_penality, downside_penalty, log_returns
+        return portfolio_return, transaction_penality, downside_penalty, log_returns\
 
     def render(self):
         return

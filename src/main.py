@@ -5,7 +5,8 @@ import random
 import numpy as np
 
 import torch
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from torch.utils.tensorboard import SummaryWriter
 from src.model import get_agent_ppo, get_agent_sac
@@ -23,6 +24,7 @@ use_cnn           = config.getboolean('MODEL', 'USE_CNN')
 total_timesteps   = config.getint('MODEL', 'TOTAL_TIMESTEPS')
 seed              = config.getint('MODEL', 'SEED')
 num_cpu           = config.getint('MODEL', 'NUM_CPU')
+checkpoint        = config.getboolean('MODEL', 'CHECKPOINT')
 
 # Configuration parameters for the environment
 stocks      = config.get('ENV','STOCKS').split(',')
@@ -72,13 +74,25 @@ def train(algo):
     ])
     vec_env = VecMonitor(vec_env)
 
+    if checkpoint:
+        checkpoint_dir = f"models/{algo}_agent_checkpoints_{datetime.now().strftime('%Y-%m-%d-%H:%M')}/"
+        checkpoint_callback = CheckpointCallback(
+            save_freq=max(1, 1_000_000 // num_cpu),
+            save_path=checkpoint_dir,
+            name_prefix=f"{algo}_agent",
+            save_replay_buffer=True,
+        )
+    else:
+        checkpoint_callback = None
+
     # Train the model
     if algo == 'PPO':
         print("PPO selected for training.")
         model = get_agent_ppo(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm)
 
         model.learn(progress_bar=True,
-                        total_timesteps=total_timesteps
+                    total_timesteps=total_timesteps,
+                    callback=checkpoint_callback
                         )
         model.save(f'models/ppo_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
@@ -87,7 +101,8 @@ def train(algo):
         model = get_agent_sac(vec_env, hidden_size_lstm=hidden_size_lstm, num_layers_lstm=num_layers_lstm)
 
         model.learn(progress_bar=True,
-                    total_timesteps=total_timesteps
+                    total_timesteps=total_timesteps,
+                    callback=checkpoint_callback
                     )
         model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
@@ -97,7 +112,8 @@ def test(seed: int):
                          env_name=f"{env_name}_test",
                          df_features=df_feat_test) # ← pass features
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_1000000_2026-03-19-16:11.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
+    # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)
     done = False
@@ -110,6 +126,7 @@ def test(seed: int):
     total_cum_return_hold = 1.0
     writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H:%M')}")
     step = 0
+    step_daily_return = window_size
 
     while not done:
         action, _states = model.predict(obs, deterministic=True)
@@ -117,7 +134,7 @@ def test(seed: int):
 
         total_cumulative_return *= (1 + float(reward))
 
-        daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step].mean()
+        daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step_daily_return].mean()
         total_cum_return_hold *= (1 + daily_market_return)
         writer.add_scalars("Comparison/Cumulative_Return", {
             "Agent_PPO": total_cumulative_return - 1,
@@ -130,6 +147,7 @@ def test(seed: int):
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
         step += 1
+        step_daily_return += 1
         done = terminated or truncated
 
     writer.close()

@@ -133,9 +133,10 @@ class CustomEnv(gym.Env):
         # On calcule le rendement quotidien du portefeuille en utilisant les poids et les rendements des actifs
         current_prices = self.df.iloc[self.current_step].values
         previous_prices = self.df.iloc[self.current_step - 1].values
-        asset_returns = (current_prices - previous_prices) / previous_prices
-        log_returns = np.log(current_prices / previous_prices)
-        portfolio_return = np.dot(portfolio_weights, asset_returns)
+        assets_returns = (current_prices - previous_prices) / previous_prices
+        assets_log_returns = np.log(current_prices / previous_prices)
+        log_returns = np.dot(portfolio_weights, assets_log_returns)
+        portfolio_return = np.dot(portfolio_weights, assets_returns)
         downside_penalty = 0.5 * min(0, portfolio_return)**2
 
         # Penalite si changement de poids important (pour encourager la stabilité du portefeuille)

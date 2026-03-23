@@ -516,6 +516,150 @@ def plot_risk_return_scatter(results_df, df_test, stocks, window_size, save_path
 
     return scatter_df
 
+def compute_strategy_ratios(results_df, risk_free_rate=0.0, ann_factor=252):
+    """
+    Compute Sharpe and Sortino ratios for agent and Buy&Hold
+    """
+    agent_returns = results_df["agent_daily_return"].dropna().values
+    benchmark_returns = results_df["benchmark_daily_return"].dropna().values
+
+    # Daily risk-free rate
+    rf_daily = risk_free_rate / ann_factor
+
+    def sharpe_ratio(returns):
+        excess_returns = returns - rf_daily
+        vol = np.std(excess_returns, ddof=1)
+        if vol == 0:
+            return np.nan
+        return np.sqrt(ann_factor) * np.mean(excess_returns) / vol
+
+    def sortino_ratio(returns):
+        excess_returns = returns - rf_daily
+        downside = excess_returns[excess_returns < 0]
+        if len(downside) == 0:
+            return np.nan
+        downside_std = np.std(downside, ddof=1)
+        if downside_std == 0:
+            return np.nan
+        return np.sqrt(ann_factor) * np.mean(excess_returns) / downside_std
+
+    ratios_df = pd.DataFrame({
+        "Strategy": ["PPO Agent", "Buy & Hold"],
+        "Sharpe Ratio": [
+            sharpe_ratio(agent_returns),
+            sharpe_ratio(benchmark_returns)
+        ],
+        "Sortino Ratio": [
+            sortino_ratio(agent_returns),
+            sortino_ratio(benchmark_returns)
+        ]
+    })
+
+    return ratios_df
+
+def plot_strategy_ratios(ratios_df, save_path=None, show=True):
+    """
+    Bar plot of Sharpe and Sortino ratios for PPO Agent and Buy & Hold.
+    """
+    plot_df = ratios_df.melt(
+        id_vars="Strategy",
+        value_vars=["Sharpe Ratio", "Sortino Ratio"],
+        var_name="Metric",
+        value_name="Value"
+    )
+
+    plt.figure(figsize=(9, 5))
+    sns.barplot(
+        data=plot_df,
+        x="Metric",
+        y="Value",
+        hue="Strategy"
+    )
+
+    plt.title("Risk-Adjusted Performance: Sharpe and Sortino Ratios")
+    plt.xlabel("")
+    plt.ylabel("Ratio")
+    plt.axhline(0, linestyle="--", linewidth=1, color="black")
+    plt.tight_layout()
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+def compute_rolling_sharpe_sortino(results_df, window=60, risk_free_rate=0.0, ann_factor=252):
+    """
+    Rolling Sharpe and Sortino for both strategies.
+    """
+    rf_daily = risk_free_rate / ann_factor
+    df = results_df.copy()
+
+    def rolling_sharpe(series):
+        def f(x):
+            excess = x - rf_daily
+            vol = np.std(excess, ddof=1)
+            if vol == 0:
+                return np.nan
+            return np.sqrt(ann_factor) * np.mean(excess) / vol
+        return series.rolling(window).apply(f, raw=True)
+
+    def rolling_sortino(series):
+        def f(x):
+            excess = x - rf_daily
+            downside = excess[excess < 0]
+            if len(downside) < 2:
+                return np.nan
+            downside_std = np.std(downside, ddof=1)
+            if downside_std == 0:
+                return np.nan
+            return np.sqrt(ann_factor) * np.mean(excess) / downside_std
+        return series.rolling(window).apply(f, raw=True)
+
+    df["agent_rolling_sharpe"] = rolling_sharpe(df["agent_daily_return"])
+    df["benchmark_rolling_sharpe"] = rolling_sharpe(df["benchmark_daily_return"])
+
+    df["agent_rolling_sortino"] = rolling_sortino(df["agent_daily_return"])
+    df["benchmark_rolling_sortino"] = rolling_sortino(df["benchmark_daily_return"])
+
+    return df
+
+def plot_rolling_ratios(results_df, metric="sharpe", save_path=None, show=True):
+    """
+    Plot rolling Sharpe or Sortino ratio over time.
+    metric: "sharpe" or "sortino"
+    """
+    if metric == "sharpe":
+        agent_col = "agent_rolling_sharpe"
+        benchmark_col = "benchmark_rolling_sharpe"
+        title = "Rolling Sharpe Ratio"
+    elif metric == "sortino":
+        agent_col = "agent_rolling_sortino"
+        benchmark_col = "benchmark_rolling_sortino"
+        title = "Rolling Sortino Ratio"
+    else:
+        raise ValueError("metric must be 'sharpe' or 'sortino'")
+
+    plt.figure(figsize=(12, 5))
+    sns.lineplot(x=results_df["step"], y=results_df[agent_col], label="PPO Agent")
+    sns.lineplot(x=results_df["step"], y=results_df[benchmark_col], label="Buy & Hold")
+
+    plt.title(title)
+    plt.xlabel("Time Step")
+    plt.ylabel("Ratio")
+    plt.axhline(0, linestyle="--", linewidth=1, color="black")
+    plt.tight_layout()
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
 def main():
 
     model_cfg, env_cfg = load_config("config.ini")
@@ -569,7 +713,8 @@ def main():
         results_df,
         save_path=f"{plots_dir}/cumulative_transaction_cost.png"
     )
-    
+
+    # Risk-return scatter
     scatter_df = plot_risk_return_scatter(
         results_df,
         df_test=df_test,
@@ -577,9 +722,30 @@ def main():
         window_size=window_size,
         save_path=f"{plots_dir}/risk_return_scatter.png"
     )
-
     scatter_df.to_csv(f"{plots_dir}/risk_return_scatter.csv", index=False)
-    
+
+    # Sortino and sharpe ratios
+    ratios_df = compute_strategy_ratios(results_df, risk_free_rate=0.0, ann_factor=252)
+    plot_strategy_ratios(
+        ratios_df,
+        save_path=f"{plots_dir}/sharpe_sortino_ratios.png"
+    )
+    ratios_df.to_csv(f"{plots_dir}/sharpe_sortino_ratios.csv", index=False)
+
+    rolling_df = compute_rolling_sharpe_sortino(results_df, window=60)
+
+    plot_rolling_ratios(
+        rolling_df,
+        metric="sharpe",
+        save_path=f"{plots_dir}/rolling_sharpe.png"
+    )
+
+    plot_rolling_ratios(
+        rolling_df,
+        metric="sortino",
+        save_path=f"{plots_dir}/rolling_sortino.png"
+    )
+
     final_agent_return = results_df["agent_cumulative_return"].iloc[-1] * 100
     final_benchmark_return = results_df["benchmark_cumulative_return"].iloc[-1] * 100
 

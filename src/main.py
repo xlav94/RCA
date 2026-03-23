@@ -23,7 +23,8 @@ num_layers_lstm   = config.getint('MODEL', 'NUM_LAYERS_LSTM')
 dropout_lstm      = config.getfloat('MODEL', 'DROPOUT_LSTM')
 use_cnn           = config.getboolean('MODEL', 'USE_CNN')
 total_timesteps   = config.getint('MODEL', 'TOTAL_TIMESTEPS')
-seed              = config.getint('MODEL', 'SEED')
+train_seed        = config.getint('MODEL', 'TRAIN_SEED')
+test_seed         = config.getint('MODEL', 'TEST_SEED')
 num_cpu           = config.getint('MODEL', 'NUM_CPU')
 checkpoint        = config.getboolean('MODEL', 'CHECKPOINT')
 
@@ -61,9 +62,9 @@ def train(algo, train_seed=None):
     vec_env = VecMonitor(vec_env)
 
     if checkpoint:
-        checkpoint_dir = f"models/{algo}_agent_checkpoints_{datetime.now().strftime('%Y-%m-%d-%H:%M')}/"
+        checkpoint_dir = f"models/{algo}_agent_checkpoints_seed_{train_seed}_{datetime.now().strftime('%Y-%m-%d-%H:%M')}/"
         checkpoint_callback = CheckpointCallback(
-            save_freq=max(1, 2_000_000 // num_cpu),
+            save_freq=max(1, 10_000_000 // num_cpu),
             save_path=checkpoint_dir,
             name_prefix=f"{algo}_agent",
             save_replay_buffer=True,
@@ -97,7 +98,7 @@ def test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_20000000_2026-03-23-05:53.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_10000000_2026-03-22-0343.zip', env=env_test, device=device)
     # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)
@@ -140,6 +141,6 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    seed_everything(seed)
-    test(seed)
-    #train("PPO") # SAC or PPO
+    seed_everything(test_seed)
+    test(test_seed)
+    #train("PPO", train_seed=train_seed) # SAC or PPO

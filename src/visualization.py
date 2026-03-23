@@ -9,14 +9,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
-import torch
 from setuptools.sandbox import save_path
-from stable_baselines3 import PPO
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
-from src.data import DataPipeline
-from src.env import CustomEnv
 
+from src.main import df_test
 
 sns.set_theme(style="whitegrid")
 
@@ -61,82 +58,101 @@ def extract_weights_from_subdirs(parent_dir):
                 steps = [e.step for e in scalars]
                 values = [e.value for e in scalars]
 
-                all_assets_data[asset_name] = pd.Series(values, index=steps)
+                all_assets_data[f"weight_{asset_name}"] = pd.Series(values, index=steps)
 
     df = pd.DataFrame(all_assets_data)
     df.index.name = 'step'
-    return df
+    return df.reset_index()
 
-def run_backtest(model_path: str, df_test: pd.DataFrame, stocks: list[str], window_size: int, env_name: str):
+def extract_root_scalar(log_dir: str, tag: str, column_name: str) -> pd.DataFrame:
     """
-    Rejoue le test complet et retourne un DataFrame contenant :
-    - reward agent
-    - cumulative return agent
-    - daily return benchmark
-    - cumulative return benchmark
-    - portfolio weights
+    Extrait un scalaire stocké directement dans le dossier principal TensorBoard.
     """
-    env = CustomEnv(df_test, stocks, window_size=window_size, env_name=f"{env_name}_visualization")
+    event_acc = EventAccumulator(log_dir)
+    event_acc.Reload()
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load(model_path, env=env, device=device)
+    available_tags = event_acc.Tags().get("scalars", [])
+    if tag not in available_tags:
+        raise ValueError(f"Tag '{tag}' introuvable dans {log_dir}. Tags disponibles: {available_tags}")
 
-    obs, _ = env.reset()
-    done = False
+    scalars = event_acc.Scalars(tag)
+    return pd.DataFrame({
+        "step": [e.step for e in scalars],
+        column_name: [e.value for e in scalars]
+    })
 
-    records = []
-    step = 0
 
-    # Rendements benchmark par actif
-    benchmark_df = df_test.copy()
-    for stock in stocks:
-        benchmark_df[f"{stock}_ret"] = benchmark_df[f"Open_{stock}"].pct_change().fillna(0.0)
+def extract_scalar_from_subdir(parent_dir: str, folder_name: str, column_name: str) -> pd.DataFrame:
+    """
+    Extrait un scalaire depuis un sous-dossier TensorBoard spécifique.
+    Ex: Comparison_Cumulative_Return_Agent_PPO
+    """
+    folder_path = os.path.join(parent_dir, folder_name)
+    if not os.path.isdir(folder_path):
+        raise ValueError(f"Sous-dossier introuvable: {folder_path}")
 
-    agent_cum = 1.0
-    benchmark_cum = 1.0
+    event_acc = EventAccumulator(folder_path)
+    event_acc.Reload()
 
-    while not done:
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = env.step(action)
+    tags = event_acc.Tags().get("scalars", [])
+    if not tags:
+        raise ValueError(f"Aucun tag scalaire trouvé dans {folder_path}")
 
-        # reward
-        agent_daily_return = float(reward)
-        agent_cum *= (1.0 + agent_daily_return)
+    tag = tags[0]
+    scalars = event_acc.Scalars(tag)
 
-        # IMPORTANT:
-        # Le step RL commence à current_step = window_size.
-        # Donc pour comparer correctement au benchmark,
-        # on aligne sur l'index window_size + step.
-        benchmark_idx = window_size + step
-        if benchmark_idx < len(benchmark_df):
-            benchmark_daily_return = benchmark_df[[f"{s}_ret" for s in stocks]].iloc[benchmark_idx].mean()
-        else:
-            benchmark_daily_return = 0.0
+    return pd.DataFrame({
+        "step": [e.step for e in scalars],
+        column_name: [e.value for e in scalars]
+    })
 
-        benchmark_cum *= (1.0 + benchmark_daily_return)
+def build_results_df_from_tensorboard(log_dir: str) -> pd.DataFrame:
+    """
+    Reconstruit results_df depuis TensorBoard uniquement.
+    """
+    # Racine
+    df_agent_daily = extract_root_scalar(
+        log_dir,
+        tag="Performance/Daily_return",
+        column_name="agent_daily_return"
+    )
 
-        row = {
-            "step": step,
-            "agent_daily_return": agent_daily_return,
-            "agent_cumulative_return": agent_cum - 1.0,
-            "benchmark_daily_return": float(benchmark_daily_return),
-            "benchmark_cumulative_return": benchmark_cum - 1.0,
-            "portfolio_return": float(info["portfolio_return"]),
-            "transaction_penality": float(info["transaction_penality"]),
-        }
+    df_penalty = extract_root_scalar(
+        log_dir,
+        tag="Performance/Transaction_penality",
+        column_name="transaction_penality"
+    )
 
-        # Ajouter les poids de portefeuille
-        for i, stock in enumerate(stocks):
-            row[f"weight_{stock}"] = float(info["portfolio_weights"][i])
+    # Sous-dossiers Comparison/*
+    df_agent_cum = extract_scalar_from_subdir(
+        log_dir,
+        folder_name="Comparison_Cumulative_Return_Agent_PPO",
+        column_name="agent_cumulative_return"
+    )
 
-        records.append(row)
+    df_benchmark_cum = extract_scalar_from_subdir(
+        log_dir,
+        folder_name="Comparison_Cumulative_Return_Buy_and_Hold",
+        column_name="benchmark_cumulative_return"
+    )
 
-        step += 1
-        done = terminated or truncated
+    # Sous-dossiers Allocation/*
+    df_weights = extract_weights_from_subdirs(log_dir)
 
-    results_df = pd.DataFrame(records)
+    # Merge
+    results_df = df_agent_daily.merge(df_penalty, on="step", how="outer")
+    results_df = results_df.merge(df_agent_cum, on="step", how="outer")
+    results_df = results_df.merge(df_benchmark_cum, on="step", how="outer")
+    results_df = results_df.merge(df_weights, on="step", how="outer")
+
+    results_df = results_df.sort_values("step").reset_index(drop=True)
+
+    # Reconstruire benchmark_daily_return à partir du cumulative benchmark
+    wealth_benchmark = 1.0 + results_df["benchmark_cumulative_return"]
+    results_df["benchmark_daily_return"] = wealth_benchmark / wealth_benchmark.shift(1) - 1.0
+    results_df.loc[0, "benchmark_daily_return"] = np.nan
+
     return results_df
-
 
 def plot_cumulative_returns(results_df: pd.DataFrame, save_path: str = None, show: bool = True):
     """
@@ -502,89 +518,68 @@ def plot_risk_return_scatter(results_df, df_test, stocks, window_size, save_path
 
 def main():
 
-    model_cfg, env_cfg = load_config("../config.ini")
+    model_cfg, env_cfg = load_config("config.ini")
 
     stocks = env_cfg["stocks"]
     window_size = env_cfg["window_size"]
-    env_name = env_cfg["env_name"]
-    '''
-    # Mets ici le chemin de ton modèle
-    model_path = "../models/ppo_agent_PMPT_10M.zip"
 
-    # Même logique que dans main.py
-    df = DataPipeline(
-        tickers=stocks,
-        start_date="2010-01-01",
-        end_date="2026-02-28"
-    ).get_env_data(feature="Open")
+    log_path = "tensorboard_logs/test_results_2026-03-22-2136"
+    results_df = build_results_df_from_tensorboard(log_path)
 
-    train_size = int(len(df) * 0.8)
-    df_test = df.iloc[train_size:].copy()
 
-    results_df = run_backtest(
-        model_path=model_path,
-        df_test=df_test,
-        stocks=stocks,
-        window_size=window_size,
-        env_name=env_name
-    )'''
-
-    log_path = "../tensorboard_logs/test_results_PMPT_10M/"
-    df_weights = extract_weights_from_subdirs(log_path)
-    top_assets = df_weights.mean().sort_values(ascending=True).index
-    results_df = df_weights[top_assets]
-
-    os.makedirs("plots", exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    plots_dir = f"src/plots/{timestamp}"
+    os.makedirs(plots_dir, exist_ok=True)
 
-    results_csv_path = f"plots/backtest_results_{timestamp}.csv"
+    results_csv_path = f"{plots_dir}/tensorboard_results.csv"
     results_df.to_csv(results_csv_path, index=False)
+    results_df.head()
 
     plot_cumulative_returns(
         results_df,
-        save_path=f"plots/cumulative_return_{timestamp}.png",
+        save_path=f"{plots_dir}/cumulative_return.png",
         show=True
     )
 
     plot_daily_profit(
         results_df,
-        save_path=f"plots/daily_return_distribution_{timestamp}.png",
+        save_path=f"{plots_dir}/daily_return_distribution.png",
         show=True
     )
 
     plot_portfolio_weights_interactive(
         results_df,
         stocks=stocks,
-        save_path_html=f"plots/portfolio_weights_interactive_{timestamp}.html"
+        save_path_html=f"{plots_dir}/portfolio_weights_interactive.html"
     )
 
     plot_portfolio_weights_small_multiples(
         results_df,
         stocks=stocks,
-        save_path=f"plots/portfolio_weights_multiple_plots_{timestamp}.png"
+        save_path=f"{plots_dir}/portfolio_weights_multiple_plots.png"
     )
 
     plot_allocation_heatmap(
         results_df,
         stocks=stocks,
-        save_path=f"plots/allocation_heatmap_{timestamp}.png"
+        save_path=f"{plots_dir}/allocation_heatmap.png"
     )
 
     plot_cumulative_transaction_cost(
         results_df,
-        save_path=f"plots/cumulative_transaction_cost_{timestamp}.png"
+        save_path=f"{plots_dir}/cumulative_transaction_cost.png"
     )
-    '''
+    
     scatter_df = plot_risk_return_scatter(
         results_df,
         df_test=df_test,
         stocks=stocks,
         window_size=window_size,
-        save_path=f"plots/risk_return_scatter_{timestamp}.png"
+        save_path=f"{plots_dir}/risk_return_scatter.png"
     )
 
-    scatter_df.to_csv(f"plots/risk_return_scatter_{timestamp}.csv", index=False)
-    '''
+    scatter_df.to_csv(f"{plots_dir}/risk_return_scatter.csv", index=False)
+    
     final_agent_return = results_df["agent_cumulative_return"].iloc[-1] * 100
     final_benchmark_return = results_df["benchmark_cumulative_return"].iloc[-1] * 100
 

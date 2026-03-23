@@ -1,10 +1,14 @@
+import time
 import unittest
 
+import jax.numpy as jnp
 import pandas as pd
-from scipy.optimize import check_grad
+from scipy.optimize import check_grad, minimize
 
 from src.env import CustomEnv
 import numpy as np
+
+from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax
 
 
 class TestCustomEnv(unittest.TestCase):
@@ -13,7 +17,7 @@ class TestCustomEnv(unittest.TestCase):
         data = np.random.uniform(100, 200, (100, 5))
         self.df = pd.DataFrame(data, columns=[f'Stock_{i}' for i in range(5)])
         self.window_size = 10
-        self.env = CustomEnv(self.df, self.df.columns,window_size=self.window_size)
+        self.env = CustomEnv(self.df, self.df.columns, "PMPT", window_size=self.window_size)
 
     def test_reset_shapes(self):
         """Verify reset returns the correct dictionary structure and shapes."""
@@ -81,7 +85,7 @@ class TestCustomEnv(unittest.TestCase):
             'Asset_2': [100, 90]
         }
         df = pd.DataFrame(data)
-        env = CustomEnv(df, np.array(['Asset_1', 'Asset_2']), window_size=1)
+        env = CustomEnv(df, np.array(['Asset_1', 'Asset_2']), "PMPT", window_size=1)
 
         weights_equal = np.array([0.5, 0.5])
         reward_a = env._calculate_reward(weights_equal)
@@ -193,3 +197,95 @@ class TestCustomEnv(unittest.TestCase):
         # Vérification des dimensions (Crucial pour SLSQP)
         grad_shape = jacobian_PMPT(test_weights).shape
         print(f"Dimensions du gradient : {grad_shape} (Attendu : ({num_assets},))")
+
+    def test_pmpt_optimization_parity(self):
+        np.random.seed(42)
+        num_assets = 21
+        window_size = 60
+        data = np.random.normal(0.0005, 0.01, (window_size, num_assets))
+        stocks = [f"STK_{i}" for i in range(num_assets)]
+        returns = pd.DataFrame(data, columns=stocks)
+        mu = np.random.normal(0.01, 0.02, num_assets)
+
+        low_b, up_b = 0.0, 0.10
+
+        initial_weights = np.full(num_assets, 1 / num_assets)
+
+        ######### SCIPY ##########
+        def objective_PMPT(weights, l=1.0, epsilon=1e-5):
+            port_return = weights @ mu
+            historical_port_return = returns @ weights
+            downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+            return -(port_return - l * downside_risk)
+
+        def jacobian_PMPT(weights, l=1.0, epsilon=1e-5):
+            historical_port_return = returns @ weights
+            downside_risk = np.sqrt(np.mean(np.square(np.clip(historical_port_return, None, 0))) + epsilon)
+            grad_risk = (1 / (len(returns) * downside_risk)) * returns.T @ np.clip(historical_port_return, None, 0)
+            return -(mu - l * grad_risk)
+
+        cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
+        bnds = tuple((low_b, up_b) for _ in range(num_assets))
+
+        res_scipy = minimize(
+            objective_PMPT,
+            initial_weights,
+            method='SLSQP',
+            bounds=bnds,
+            constraints=cons,
+            jac=jacobian_PMPT,
+            options={'ftol': 1e-7, 'maxiter': 100}
+        )
+        weights_scipy = res_scipy.x
+
+        ########## JAX ##########
+        po = PortfolioOptimizer(lower_bound=low_b, upper_bound=up_b)
+        weights_jax = po.minimize(
+            objective_pmpt_jax,
+            initial_weights,
+            mu,
+            returns
+        )
+
+        sum_scipy = np.sum(weights_scipy)
+        sum_jax = np.sum(weights_jax)
+
+        distance = np.linalg.norm(weights_scipy - weights_jax)
+
+        print("\n" + "=" * 40)
+        print("SCIPY vs JAX")
+        print("=" * 40)
+        print(f"Sum of weights SciPy : {sum_scipy:.6f}")
+        print(f"Sum of weights JAX   : {sum_jax:.6f}")
+        print(f"L2 norm : {distance:.2e}")
+        print("-" * 40)
+
+        assert np.isclose(sum_jax, 1.0, atol=1e-3), f"(sum={sum_jax})"
+
+        if distance < 1e-2:
+            print("Same solution")
+        else:
+            print("Different solutions")
+
+        start = time.time()
+        for _ in range(10):
+            _ = minimize(objective_PMPT, initial_weights, method='SLSQP', bounds=bnds, constraints=cons,
+                         jac=jacobian_PMPT)
+        print(f"Mean time for SciPy : {(time.time() - start) / 10:.4f}s")
+
+        _ = po.minimize(
+            objective_pmpt_jax,
+            initial_weights,
+            mu,
+            returns
+        )
+
+        start = time.time()
+        for _ in range(10):
+            _ = po.minimize(
+            objective_pmpt_jax,
+            initial_weights,
+            mu,
+            returns
+        )
+        print(f"Mean time for JAX : {(time.time() - start) / 10:.4f}s")

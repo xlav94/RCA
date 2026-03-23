@@ -10,5 +10,6 @@ tqdm
 rich
 seaborn
 matplotlib
-plotly
-kaleido
+jax
+jaxopt
+jaxlib

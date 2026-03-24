@@ -141,6 +141,6 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    seed_everything(test_seed)
-    test(test_seed)
-    #train("PPO", train_seed=train_seed) # SAC or PPO
+    #seed_everything(test_seed)
+    #test(test_seed)
+    train("PPO", train_seed=train_seed) # SAC or PPO

@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
-from setuptools.sandbox import save_path
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 
@@ -660,6 +659,42 @@ def plot_rolling_ratios(results_df, metric="sharpe", save_path=None, show=True):
     else:
         plt.close()
 
+def compute_alpha(results_df, risk_free_rate=0.0, ann_factor=252):
+    """
+    Compute annualized alpha of agent vs benchmark.
+    a = E[agent_return - Rf] - b * E[benchmark_return - Rf]
+    b = cov(agent_return - Rf, benchmark_return - Rf) / var(benchmark_return - Rf)
+    excess = return - Rf
+    """
+
+    agent_returns = results_df["agent_daily_return"].dropna().values
+    benchmark_returns = results_df["benchmark_daily_return"].dropna().values
+
+    # align lengths
+    min_len = min(len(agent_returns), len(benchmark_returns))
+    agent_returns = agent_returns[:min_len]
+    benchmark_returns = benchmark_returns[:min_len]
+
+    rf_daily = risk_free_rate / ann_factor
+
+    # excess returns
+    agent_excess = agent_returns - rf_daily
+    bench_excess = benchmark_returns - rf_daily
+
+    # beta
+    cov = np.cov(agent_excess, bench_excess)[0, 1]
+    var = np.var(bench_excess)
+
+    beta = cov / var if var != 0 else np.nan
+
+    # alpha (daily)
+    alpha_daily = np.mean(agent_excess) - beta * np.mean(bench_excess)
+
+    # annualized alpha
+    alpha_annual = alpha_daily * ann_factor
+
+    return alpha_annual
+
 def main():
 
     model_cfg, env_cfg = load_config("config.ini")
@@ -725,13 +760,6 @@ def main():
     scatter_df.to_csv(f"{plots_dir}/risk_return_scatter.csv", index=False)
 
     # Sortino and sharpe ratios
-    ratios_df = compute_strategy_ratios(results_df, risk_free_rate=0.0, ann_factor=252)
-    plot_strategy_ratios(
-        ratios_df,
-        save_path=f"{plots_dir}/sharpe_sortino_ratios.png"
-    )
-    ratios_df.to_csv(f"{plots_dir}/sharpe_sortino_ratios.csv", index=False)
-
     rolling_df = compute_rolling_sharpe_sortino(results_df, window=60)
 
     plot_rolling_ratios(
@@ -745,6 +773,16 @@ def main():
         metric="sortino",
         save_path=f"{plots_dir}/rolling_sortino.png"
     )
+
+    alpha = compute_alpha(results_df)
+
+    print(f"Alpha (annual): {alpha:.4f}")
+    if alpha < 0:
+        print("Agent sous-performe le buy&hold")
+    elif alpha == 0:
+        print("Agent performance ~ buy&hold performance")
+    else :
+        print("Agent sur-performe le sell&hold")
 
     final_agent_return = results_df["agent_cumulative_return"].iloc[-1] * 100
     final_benchmark_return = results_df["benchmark_cumulative_return"].iloc[-1] * 100

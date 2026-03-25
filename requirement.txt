@@ -13,3 +13,4 @@ matplotlib
 jax
 jaxopt
 jaxlib
+plotly

@@ -102,7 +102,7 @@ def train(algo, train_seed=None):
                     )
         model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
-    vec_env.save(f'envs/{algo}_seed_{train_seed}_env.pkl')
+    vec_env.save(f'models/envs/{algo}_seed_{train_seed}_env.pkl')
 
 
 def test(seed: int):

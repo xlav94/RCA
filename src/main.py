@@ -61,7 +61,7 @@ def train(algo):
     vec_env = VecMonitor(vec_env)
 
     if checkpoint:
-        checkpoint_dir = f"models/{algo}_agent_checkpoints_{datetime.now().strftime('%Y-%m-%d-%H%M')}/"
+        checkpoint_dir = f"models/{algo}_agent_checkpoints_{datetime.now().strftime('%Y-%m-%d-%H:%M')}/"
         checkpoint_callback = CheckpointCallback(
             save_freq=max(1, 1_000_000 // num_cpu),
             save_path=checkpoint_dir,
@@ -80,7 +80,7 @@ def train(algo):
                     total_timesteps=total_timesteps,
                     callback=checkpoint_callback
                         )
-        model.save(f'models/ppo_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H%M")}')
+        model.save(f'models/ppo_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
     elif algo == 'SAC':
         print("SAC selected for training.")
@@ -90,14 +90,14 @@ def train(algo):
                     total_timesteps=total_timesteps,
                     callback=checkpoint_callback
                     )
-        model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H%M")}')
+        model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
 
-def run_test(seed: int):
+def test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/PPO_agent_checkpoints_2026-03-21-0026/PPO_agent_10000000_steps.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
     # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)
@@ -109,7 +109,7 @@ def run_test(seed: int):
         df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
     total_cumulative_return = 1.0
     total_cum_return_hold = 1.0
-    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H%M')}")
+    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H:%M')}")
     step = 0
     step_daily_return = window_size
 
@@ -141,5 +141,5 @@ def run_test(seed: int):
 
 if __name__ == "__main__":
     seed_everything(seed)
-    run_test(seed)
+    test(seed)
     #train("PPO") # SAC or PPO

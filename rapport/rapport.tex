@@ -9,7 +9,7 @@
 % The authors should use one of these tracks.
 % Before accepting by the NeurIPS conference, select one of the options below.
 % 0. "default" for submission
- \usepackage{neurips_2025}
+ \usepackage[preprint]{neurips_2025}
 % the "default" option is equal to the "main" option, which is used for the Main Track with double-blind reviewing.
 % 1. "main" option is used for the Main Track
 %  \usepackage[main]{neurips_2025}
@@ -304,12 +304,34 @@ $DR(w)$ = Downside Risk (Mean Semi-deviation) of the portfolio with weights $w$\
 Quadratic Utility Function:
 $-\left[ w^T \mu - \frac{1}{2} \lambda (w^T \Sigma w) \right]$ \\
 
-\textbf{Post Modern Porfolio Theory Mean Semi-deviation Optmization} \\
+\textbf{Post Modern Portfolio Theory Mean Semi-deviation Optmization} \\
 Mean-Semideviation Utility Function:
 $-\left[ w^T \mu - \lambda \sqrt{\frac{1}{N} \sum_{t=1}^{N} \min(0, r_t^T w)^2 + \epsilon} \right]$ \\
 Jacobian for Mean Semi-deviation Utility:
 $-\left[ \mu - \lambda \frac{ \sum_{t=1}^{N} \min(0, r_t w) r_t}{N DR(w)} \right]$ \\
-\textit{Using de Jacobian for the optimization is 27\% faster than without it during the training process.}
+\textit{Using the Jacobian for the optimization is 27\% faster than without it during the training process.}
+
+
+\section{Portfolio Assets}
+\begin{table}[h!]
+    \centering
+    \caption{Breakdown of portfolio assets by sector.}
+    \label{tab:portfolio_assets}
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{Assets} & \textbf{Sector} \\
+        \midrule
+        MSFT, GOOG, AMZN, AAPL & Technology \\
+        BRK-B, JPM, V & Financials \\
+        WMT, COST, PG & Consumer Staples \\
+        LLY, UNH & Healthcare \\
+        GLD, DBC & Commodities \\
+        UNP, CAT, LIN, NEE, AMT & Industrials \\
+        XOM, CVX & Energy \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
 \newpage
 
 

@@ -156,31 +156,3 @@ def get_agent_sac(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
                 device=device
                 )
     return model
-
-def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True,
-              learning_rate=0.001, n_steps=2048, batch_size=50, n_epochs=10):
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"L'agent s'entraînera sur : {device}")
-
-    policy_kwargs = dict(
-        features_extractor_class=CustomCombinedExtractor,
-        features_extractor_kwargs=dict(
-                                       hidden_size_lstm=hidden_size_lstm,
-                                       num_layers_lstm=num_layers_lstm,
-                                       lstm_dropout=dropout_lstm,
-                                       batch_first=batch_first,
-                                       use_cnn=use_cnn)
-    )
-
-    model = PPO("MultiInputPolicy", env,
-                learning_rate=linear_schedule(config.getfloat('SAC', 'LEARNING_RATE')),
-                n_steps=n_steps,
-                batch_size=batch_size,
-                n_epochs=n_epochs,
-                policy_kwargs=policy_kwargs,
-                verbose=1,
-                tensorboard_log="./tensorboard_logs/",
-                device=device
-                )
-    return model

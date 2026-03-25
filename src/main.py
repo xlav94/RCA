@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, VecNormalize, DummyVecEnv
 from torch.utils.tensorboard import SummaryWriter
 from src.model import get_agent_ppo, get_agent_sac
 from src.data import DataPipeline
@@ -18,6 +18,7 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 # Configuration parameters for the model
+is_training       = config.getboolean('MODEL', 'IS_TRAINING')
 hidden_size_lstm  = config.getint('MODEL', 'HIDDEN_SIZE_LSTM')
 num_layers_lstm   = config.getint('MODEL', 'NUM_LAYERS_LSTM')
 dropout_lstm      = config.getfloat('MODEL', 'DROPOUT_LSTM')
@@ -61,6 +62,14 @@ def train(algo, train_seed=None):
 
     vec_env = VecMonitor(vec_env)
 
+    vec_env = VecNormalize(
+        vec_env,
+        training=True,
+        norm_obs=True,
+        norm_reward=True,
+        clip_reward=10.0,
+    )
+
     if checkpoint:
         checkpoint_dir = f"models/{algo}_agent_checkpoints_seed_{train_seed}_{datetime.now().strftime('%Y-%m-%d-%H:%M')}/"
         checkpoint_callback = CheckpointCallback(
@@ -81,7 +90,7 @@ def train(algo, train_seed=None):
                     total_timesteps=total_timesteps,
                     callback=checkpoint_callback
                         )
-        model.save(f'models/ppo_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
+        model.save(f'models/ppo_agent_{total_timesteps}_seed_{train_seed}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
     elif algo == 'SAC':
         print("SAC selected for training.")
@@ -93,15 +102,23 @@ def train(algo, train_seed=None):
                     )
         model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
+    vec_env.save(f'envs/{algo}_seed_{train_seed}_env.pkl')
+
 
 def test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
+    env_test.reset(seed=seed)
+
+    env_test = DummyVecEnv([lambda: env_test])
+    env_test = VecNormalize.load(f'envs/PPO_env.pkl', env_test)
+    env_test.training = False
+    env_test.norm_reward = False
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_10000000_2026-03-22-0343.zip', env=env_test, device=device)
-    # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
+    #model = SAC.load('models/sac_agent_1000000_2026-03-16-23:18.zip', env=env_test, device=device)
 
-    obs, _ = env_test.reset(seed=seed)
+    obs = env_test.reset()
     done = False
 
     print(f"Début du test sur {len(df_test)} points de données...")
@@ -115,10 +132,10 @@ def test(seed: int):
     step_daily_return = window_size
 
     while not done:
-        action, _states = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = env_test.step(action)
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, dones, info = env_test.step(action)
 
-        total_cumulative_return *= (1 + float(reward))
+        total_cumulative_return *= (1 + info[0]["portfolio_return"])
 
         daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step_daily_return].mean()
         total_cum_return_hold *= (1 + daily_market_return)
@@ -127,20 +144,25 @@ def test(seed: int):
             "Buy_and_Hold": total_cum_return_hold - 1
         }, step)
 
-        writer.add_scalar("Performance/Daily_return", info["portfolio_return"], step)
-        writer.add_scalar("Performance/Transaction_penality", info["transaction_penality"], step)
-        weights_dict = {stocks[i]: float(info["portfolio_weights"][i]) for i in range(len(stocks))}
+        writer.add_scalar("Performance/Daily_return", info[0]["portfolio_return"], step)
+        writer.add_scalar("Performance/Transaction_penality", info[0]["transaction_penality"], step)
+        weights_dict = {stocks[i]: float(info[0]["portfolio_weights"][i]) for i in range(len(stocks))}
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
         step += 1
         step_daily_return += 1
-        done = terminated or truncated
+        done = dones[0]
 
     writer.close()
     print(f"Test terminé. Profit final: {(total_cumulative_return - 1) * 100:.2f}%")
+    print(f"Benchmark Buy-and-Hold: {(total_cum_return_hold - 1) * 100:.2f}%")
 
 
 if __name__ == "__main__":
-    #seed_everything(test_seed)
-    #test(test_seed)
-    train("PPO", train_seed=train_seed) # SAC or PPO
+    if is_training:
+        seed_everything(train_seed)
+        train("PPO", train_seed=train_seed)  # SAC or PPO
+    else:
+        seed_everything(test_seed)
+        test(test_seed)
+

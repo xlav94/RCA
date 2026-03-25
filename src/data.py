@@ -213,11 +213,13 @@ class DataPipeline:
 
         return clean_df
 
-    def get_features_data(self, d: float = 0.4, fracdiff_window: int = 50) -> pd.DataFrame:
-        """Builds the feature-engineered df (FracDiff + WaveletReturn) from the same raw data."""
+    def get_features_data(self, d: float = 0.4, fracdiff_window: int = 50,
+                          use_fracdiff: bool = True, use_wavelet: bool = True) -> pd.DataFrame:
         downloader = DataDownloader(self.tickers, self.start_date, self.end_date, self.data_path)
         raw_df = downloader.fetch_data()
         preprocessor = DataPreprocessor(raw_df, self.tickers)
-        preprocessor.add_fracdiff(d=d, window=fracdiff_window)
-        preprocessor.add_wavelet_denoise()
+        if use_fracdiff:
+            preprocessor.add_fracdiff(d=d, window=fracdiff_window)
+        if use_wavelet:
+            preprocessor.add_wavelet_denoise()
         return preprocessor.get_features_data()

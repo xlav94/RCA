@@ -35,18 +35,20 @@ objective   = config.get('ENV', 'OBJECTIVE')
 pipeline = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28')
 
 df = pipeline.get_env_data(feature='Open')
-df_features = pipeline.get_features_data(d=0.4, fracdiff_window=50)
-
-# Align indices: fracdiff NaN-drops the first `window` rows
-common_idx = df.index.intersection(df_features.index)
-df = df.loc[common_idx]
-df_features = df_features.loc[common_idx]
-
 train_size = int(len(df) * 0.8)
-df_train = df.iloc[:train_size]
-df_test = df.iloc[train_size:]
-df_feat_train = df_features.iloc[:train_size]
-df_feat_test = df_features.iloc[train_size:]
+df_train   = df.iloc[:train_size]
+df_test    = df.iloc[train_size:]
+
+def _build_features(use_fracdiff: bool, use_wavelet: bool):
+    if not use_fracdiff and not use_wavelet:
+        return None, None
+    df_features = pipeline.get_features_data(d=0.4, fracdiff_window=50,
+                                             use_fracdiff=use_fracdiff,
+                                             use_wavelet=use_wavelet)
+    common_idx  = df.index.intersection(df_features.index)
+    df_aligned  = df.loc[common_idx]
+    train_size  = int(len(df_aligned) * 0.8)
+    return df_features.iloc[:train_size], df_features.iloc[train_size:]
 
 def make_env(df_env, df_feat_env, stocks_env, objective_env, window_size_env, env_name_env):
     def _init():
@@ -67,7 +69,8 @@ def seed_everything(seed_init: int):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-def train(algo):
+def train(algo, use_fracdiff: bool = True, use_wavelet: bool = True):
+    df_feat_train, _ = _build_features(use_fracdiff, use_wavelet)
     vec_env = SubprocVecEnv([
         make_env(df_train, df_feat_train, stocks, objective, window_size, env_name)
         for _ in range(num_cpu)
@@ -107,12 +110,13 @@ def train(algo):
         model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
 
 
-def test(seed: int):
+def test(seed: int, use_fracdiff: bool = True, use_wavelet: bool = True):
+    _, df_feat_test = _build_features(use_fracdiff, use_wavelet)
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size,
                          env_name=f"{env_name}_test",
                          df_features=df_feat_test) # ← pass features
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_20000000_2026-03-22-18:09.zip', env=env_test, device=device)
     # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)
@@ -155,6 +159,6 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
-    seed_everything(seed)
-    test(seed)
-    #train("PPO") # SAC or PPO
+    #seed_everything(seed)
+    #test(seed, use_fracdiff=False, use_wavelet=True)
+    train("PPO", use_fracdiff=False, use_wavelet=True)

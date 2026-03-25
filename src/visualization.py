@@ -188,29 +188,6 @@ def plot_cumulative_returns(results_df: pd.DataFrame, save_path: str = None, sho
     else:
         plt.close()
 
-
-def plot_daily_profit(results_df: pd.DataFrame, save_path: str = None, show: bool = True):
-    """
-    Histogramme / densité simple des rendements journaliers de l'agent.
-    """
-    plt.figure(figsize=(10, 5))
-
-    sns.histplot(results_df["agent_daily_return"], bins=40, kde=True)
-
-    plt.title("Distribution of Agent Daily Returns")
-    plt.xlabel("Daily Return")
-    plt.ylabel("Frequency")
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
-
-
 def plot_portfolio_weights_interactive(results_df, stocks, save_path_html=None):
     fig = go.Figure()
     colors = px.colors.qualitative.Plotly
@@ -270,121 +247,6 @@ def plot_portfolio_weights_interactive(results_df, stocks, save_path_html=None):
         fig.write_html(save_path_html)
 
     fig.show()
-
-def plot_portfolio_weights_small_multiples(
-    results_df,
-    stocks,
-    save_path=None,
-    ncols=1,
-    figsize_per_row=(12, 2.2)
-):
-    """
-    Crée un graphique 'small multiples':
-    - un sous-graphe par actif
-    - l'actif concerné est mis en évidence en noir
-    - les autres sont en gris clair
-    """
-
-    sns.set_theme(style="whitegrid")
-
-    n_assets = len(stocks)
-    nrows = math.ceil(n_assets / ncols)
-
-    fig, axes = plt.subplots(
-        nrows=nrows,
-        ncols=ncols,
-        figsize=(figsize_per_row[0] * ncols, figsize_per_row[1] * nrows),
-        sharex=True,
-        sharey=True
-    )
-
-    if n_assets == 1:
-        axes = [axes]
-    elif ncols == 1:
-        axes = list(axes)
-    else:
-        axes = axes.flatten()
-
-    x = results_df["step"]
-
-    for idx, stock_highlight in enumerate(stocks):
-        ax = axes[idx]
-
-        # Toutes les autres courbes en gris
-        for stock in stocks:
-            ax.plot(
-                x,
-                results_df[f"weight_{stock}"],
-                color="lightgray",
-                linewidth=1.0,
-                alpha=0.8,
-                drawstyle="steps-post"
-            )
-
-        # Courbe mise en évidence
-        ax.plot(
-            x,
-            results_df[f"weight_{stock_highlight}"],
-            color="black",
-            linewidth=1.8,
-            alpha=1.0,
-            drawstyle="steps-post"
-        )
-
-        ax.set_title(stock_highlight, loc="left", fontsize=10)
-        ax.set_ylim(0, 0.105)
-        ax.grid(True, alpha=0.3)
-
-        # Alléger visuellement
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-
-    # Supprimer axes inutilisés si la grille est plus grande que le nb d'actifs
-    for j in range(n_assets, len(axes)):
-        fig.delaxes(axes[j])
-
-    fig.supxlabel("Time Step", fontsize=11)
-    fig.supylabel("Portfolio Weight", fontsize=11)
-    fig.suptitle("Portfolio Allocation Small Multiples", fontsize=13, y=0.995)
-
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    plt.show()
-
-def plot_allocation_heatmap(results_df, stocks, save_path=None, show=True):
-    """
-    Heatmap of portfolio weights over time.
-    Rows = assets
-    Columns = time steps
-    Color = allocated weight
-    """
-    weight_cols = [f"weight_{stock}" for stock in stocks]
-    heatmap_data = results_df[weight_cols].copy().T
-    heatmap_data.index = stocks
-
-    plt.figure(figsize=(14, 6))
-    sns.heatmap(
-        heatmap_data,
-        cmap="YlGnBu",
-        cbar_kws={"label": "Portfolio Weight"},
-        xticklabels=False
-    )
-
-    plt.title("Portfolio Allocation Heatmap")
-    plt.xlabel("Time Step")
-    plt.ylabel("Assets")
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
 
 def plot_cumulative_transaction_cost(results_df, save_path=None, show=True):
     """
@@ -514,80 +376,6 @@ def plot_risk_return_scatter(results_df, df_test, stocks, window_size, save_path
         plt.close()
 
     return scatter_df
-
-def compute_strategy_ratios(results_df, risk_free_rate=0.0, ann_factor=252):
-    """
-    Compute Sharpe and Sortino ratios for agent and Buy&Hold
-    """
-    agent_returns = results_df["agent_daily_return"].dropna().values
-    benchmark_returns = results_df["benchmark_daily_return"].dropna().values
-
-    # Daily risk-free rate
-    rf_daily = risk_free_rate / ann_factor
-
-    def sharpe_ratio(returns):
-        excess_returns = returns - rf_daily
-        vol = np.std(excess_returns, ddof=1)
-        if vol == 0:
-            return np.nan
-        return np.sqrt(ann_factor) * np.mean(excess_returns) / vol
-
-    def sortino_ratio(returns):
-        excess_returns = returns - rf_daily
-        downside = excess_returns[excess_returns < 0]
-        if len(downside) == 0:
-            return np.nan
-        downside_std = np.std(downside, ddof=1)
-        if downside_std == 0:
-            return np.nan
-        return np.sqrt(ann_factor) * np.mean(excess_returns) / downside_std
-
-    ratios_df = pd.DataFrame({
-        "Strategy": ["PPO Agent", "Buy & Hold"],
-        "Sharpe Ratio": [
-            sharpe_ratio(agent_returns),
-            sharpe_ratio(benchmark_returns)
-        ],
-        "Sortino Ratio": [
-            sortino_ratio(agent_returns),
-            sortino_ratio(benchmark_returns)
-        ]
-    })
-
-    return ratios_df
-
-def plot_strategy_ratios(ratios_df, save_path=None, show=True):
-    """
-    Bar plot of Sharpe and Sortino ratios for PPO Agent and Buy & Hold.
-    """
-    plot_df = ratios_df.melt(
-        id_vars="Strategy",
-        value_vars=["Sharpe Ratio", "Sortino Ratio"],
-        var_name="Metric",
-        value_name="Value"
-    )
-
-    plt.figure(figsize=(9, 5))
-    sns.barplot(
-        data=plot_df,
-        x="Metric",
-        y="Value",
-        hue="Strategy"
-    )
-
-    plt.title("Risk-Adjusted Performance: Sharpe and Sortino Ratios")
-    plt.xlabel("")
-    plt.ylabel("Ratio")
-    plt.axhline(0, linestyle="--", linewidth=1, color="black")
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
 
 def compute_rolling_sharpe_sortino(results_df, window=60, risk_free_rate=0.0, ann_factor=252):
     """
@@ -720,28 +508,10 @@ def main():
         show=True
     )
 
-    plot_daily_profit(
-        results_df,
-        save_path=f"{plots_dir}/daily_return_distribution.png",
-        show=True
-    )
-
     plot_portfolio_weights_interactive(
         results_df,
         stocks=stocks,
         save_path_html=f"{plots_dir}/portfolio_weights_interactive.html"
-    )
-
-    plot_portfolio_weights_small_multiples(
-        results_df,
-        stocks=stocks,
-        save_path=f"{plots_dir}/portfolio_weights_multiple_plots.png"
-    )
-
-    plot_allocation_heatmap(
-        results_df,
-        stocks=stocks,
-        save_path=f"{plots_dir}/allocation_heatmap.png"
     )
 
     plot_cumulative_transaction_cost(

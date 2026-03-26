@@ -1,5 +1,4 @@
 import configparser
-import zipfile
 from datetime import datetime
 import os
 import random
@@ -97,7 +96,7 @@ def run_test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/PPO_agent_checkpoints_2026-03-21-0026/PPO_agent_10000000_steps.zip', env=env_test, device=device)
+    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
     # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
 
     obs, _ = env_test.reset(seed=seed)

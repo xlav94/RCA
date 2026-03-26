@@ -7,12 +7,14 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, DummyVecEnv
 from torch.utils.tensorboard import SummaryWriter
 from src.model import get_agent_ppo, get_agent_sac
 from src.data import DataPipeline
 from src.env import CustomEnv
 
+#os.environ['OMP_NUM_THREADS'] = '1'
+#os.environ['MKL_NUM_THREADS'] = '1'
 config = configparser.ConfigParser()
 config.read('config.ini')
 
@@ -33,22 +35,24 @@ env_name    = config.get('ENV', 'ENV_NAME')
 objective   = config.get('ENV', 'OBJECTIVE')
 
 pipeline = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28')
+df_raw = pipeline.get_env_data(feature='Open')
 
-df = pipeline.get_env_data(feature='Open')
-train_size = int(len(df) * 0.8)
-df_train   = df.iloc[:train_size]
-df_test    = df.iloc[train_size:]
-
-def _build_features(use_fracdiff: bool, use_wavelet: bool):
+def get_synchronized_data(use_fracdiff: bool, use_wavelet: bool):
     if not use_fracdiff and not use_wavelet:
-        return None, None
+        train_size = int(len(df_raw) * 0.8)
+        return (df_raw.iloc[:train_size], None), (df_raw.iloc[train_size:], None)
+
     df_features = pipeline.get_features_data(d=0.4, fracdiff_window=50,
                                              use_fracdiff=use_fracdiff,
                                              use_wavelet=use_wavelet)
-    common_idx  = df.index.intersection(df_features.index)
-    df_aligned  = df.loc[common_idx]
-    train_size  = int(len(df_aligned) * 0.8)
-    return df_features.iloc[:train_size], df_features.iloc[train_size:]
+    common_idx          = df_raw.index.intersection(df_features.index)
+    df_prices_aligned   = df_raw.loc[common_idx]
+    df_features_aligned = df_features.loc[common_idx]
+
+    train_size = int(len(common_idx) * 0.8)
+    train_data = (df_prices_aligned.iloc[:train_size], df_features_aligned.iloc[:train_size])
+    test_data  = (df_prices_aligned.iloc[train_size:], df_features_aligned.iloc[train_size:])
+    return train_data, test_data
 
 def make_env(df_env, df_feat_env, stocks_env, objective_env, window_size_env, env_name_env):
     def _init():
@@ -70,9 +74,9 @@ def seed_everything(seed_init: int):
         torch.backends.cudnn.benchmark = False
 
 def train(algo, use_fracdiff: bool = True, use_wavelet: bool = True):
-    df_feat_train, _ = _build_features(use_fracdiff, use_wavelet)
+    (df_train_sync, df_feat_train_sync), _ = get_synchronized_data(use_fracdiff, use_wavelet)
     vec_env = SubprocVecEnv([
-        make_env(df_train, df_feat_train, stocks, objective, window_size, env_name)
+        make_env(df_train_sync, df_feat_train_sync, stocks, objective, window_size, env_name)
         for _ in range(num_cpu)
     ])
     vec_env = VecMonitor(vec_env)
@@ -111,10 +115,10 @@ def train(algo, use_fracdiff: bool = True, use_wavelet: bool = True):
 
 
 def test(seed: int, use_fracdiff: bool = True, use_wavelet: bool = True):
-    _, df_feat_test = _build_features(use_fracdiff, use_wavelet)
-    env_test = CustomEnv(df_test, stocks, objective, window_size=window_size,
+    _, (df_test_sync, df_feat_test_sync) = get_synchronized_data(use_fracdiff, use_wavelet)
+    env_test = CustomEnv(df_test_sync, stocks, objective, window_size=window_size,
                          env_name=f"{env_name}_test",
-                         df_features=df_feat_test) # ← pass features
+                         df_features=df_feat_test_sync)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = PPO.load('models/ppo_agent_20000000_2026-03-22-18:09.zip', env=env_test, device=device)
     # model = SAC.load('models/SAC_agent_20000000_steps.zip', env=env_test, device=device)
@@ -122,8 +126,8 @@ def test(seed: int, use_fracdiff: bool = True, use_wavelet: bool = True):
     obs, _ = env_test.reset(seed=seed)
     done = False
 
-    print(f"Début du test sur {len(df_test)} points de données...")
-    df_benchmark = df_test.copy()
+    print(f"Début du test sur {len(df_test_sync)} points synchronisés...")
+    df_benchmark = df_test_sync.copy()
     for stock in stocks:
         df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
     total_cumulative_return = 1.0
@@ -160,5 +164,5 @@ def test(seed: int, use_fracdiff: bool = True, use_wavelet: bool = True):
 
 if __name__ == "__main__":
     #seed_everything(seed)
-    #test(seed, use_fracdiff=False, use_wavelet=True)
-    train("PPO", use_fracdiff=False, use_wavelet=True)
+    #test(seed, use_fracdiff=True, use_wavelet=True)
+    train("PPO", use_fracdiff=True, use_wavelet=True)

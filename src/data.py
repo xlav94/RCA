@@ -148,34 +148,44 @@ class DataPreprocessor:
         weights = [1.0]
         for k in range(1, window):
             weights.append(-weights[-1] * (d - k + 1) / k)
-        weights = np.array(weights)  # no need to reverse for np.convolve
+        weights = np.array(weights)
 
         for ticker in self.tickers:
             col = f"Open_{ticker}"
             if col not in self.df.columns:
                 continue
             series = self.df[col].values.astype(float)
-            # 'valid' mode naturally produces NaNs for the first (window-1) rows
             convolved = np.convolve(series, weights, mode='full')[:len(series)].copy()
             convolved[:window - 1] = np.nan
             self.df[f"FracDiff_{ticker}"] = convolved
 
         return self
 
-    def add_wavelet_denoise(self, wavelet: str = "db4", level: int = 1) -> "DataPreprocessor":
+    def add_wavelet_denoise(self, wavelet: str = "db4", level: int = 1, train_ratio: float = 0.8) -> "DataPreprocessor":
         for ticker in self.tickers:
             open_col = f"Open_{ticker}"
             if open_col not in self.df.columns:
                 continue
 
-            raw_returns = self.df[open_col].pct_change().fillna(0).values.copy()  # ← .copy() here
+            raw_returns = self.df[open_col].pct_change().fillna(0).values.copy()
+            train_end = int(len(raw_returns) * train_ratio)
 
-            coeffs = pywt.wavedec(raw_returns, wavelet, level=level)
-            sigma = np.median(np.abs(coeffs[-1])) / 0.6745
-            coeffs[1:] = [pywt.threshold(c, sigma, mode="soft") for c in coeffs[1:]]
-            denoised = pywt.waverec(coeffs, wavelet)[:len(raw_returns)]
+            # TRAIN
+            train_returns = raw_returns[:train_end]
+            train_coeffs = pywt.wavedec(train_returns, wavelet, level=level)
+            sigma = np.median(np.abs(train_coeffs[-1])) / 0.6745
+            train_coeffs[1:] = [pywt.threshold(c, sigma, mode="soft") for c in train_coeffs[1:]]
+            denoised_train = pywt.waverec(train_coeffs, wavelet)[:len(train_returns)]
 
-            self.df[f"WaveletReturn_{ticker}"] = denoised
+            # TEST
+            test_returns = raw_returns[train_end:]
+            test_coeffs = pywt.wavedec(test_returns, wavelet, level=level)
+            test_coeffs[1:] = [pywt.threshold(c, sigma, mode="soft") for c in test_coeffs[1:]]
+            denoised_test = pywt.waverec(test_coeffs, wavelet)[:len(test_returns)]
+
+            denoised_full = np.concatenate([denoised_train, denoised_test])
+            self.df[f"WaveletReturn_{ticker}"] = denoised_full
+
         return self
 
     def get_features_data(self) -> pd.DataFrame:

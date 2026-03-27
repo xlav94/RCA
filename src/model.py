@@ -103,11 +103,6 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
 
     return func
 
-def exponential_schedule(initial_value: float, decay_rate: float = 0.01):
-    def func(progress_remaining: float) -> float:
-        return initial_value * math.exp(-decay_rate * (1 - progress_remaining))
-    return func
-
 def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -124,7 +119,7 @@ def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
     )
 
     model = PPO("MultiInputPolicy", env,
-                learning_rate=exponential_schedule(config.getfloat('PPO', 'LEARNING_RATE'), decay_rate=3),
+                learning_rate=linear_schedule(config.getfloat('PPO', 'LEARNING_RATE')),
                 n_steps=config.getint('PPO', 'N_STEPS'),
                 batch_size=config.getint('PPO', 'BATCH_SIZE'),
                 n_epochs=config.getint('PPO', 'N_EPOCHS'),
@@ -151,7 +146,7 @@ def get_agent_sac(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
     )
 
     model = SAC("MultiInputPolicy", env,
-                learning_rate=exponential_schedule(config.getfloat('SAC', 'LEARNING_RATE'), decay_rate=3),
+                learning_rate=linear_schedule(config.getfloat('SAC', 'LEARNING_RATE')),
                 batch_size=config.getint('SAC', 'BATCH_SIZE'),
                 buffer_size=config.getint('SAC', 'BUFFER_SIZE'),
                 gradient_steps=config.getint('SAC', 'GRADIENT_STEPS'),
@@ -179,7 +174,7 @@ def get_agent(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_
     )
 
     model = PPO("MultiInputPolicy", env,
-                learning_rate=exponential_schedule(learning_rate),
+                learning_rate=linear_schedule(config.getfloat('SAC', 'LEARNING_RATE')),
                 n_steps=n_steps,
                 batch_size=batch_size,
                 n_epochs=n_epochs,

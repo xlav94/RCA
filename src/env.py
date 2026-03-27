@@ -59,7 +59,7 @@ class CustomEnv(gym.Env):
 
     def step(self, action : np.ndarray):
         portfolio_weights = self._get_weights_from_action_mpt(action)
-        portfolio_return, transaction_penality = self._calculate_reward(portfolio_weights)
+        portfolio_return, transaction_penality, downside_penalty, log_returns = self._calculate_reward(portfolio_weights)
         reward = portfolio_return - transaction_penality
         self.current_step += 1
         self.weights = portfolio_weights
@@ -71,7 +71,9 @@ class CustomEnv(gym.Env):
             "portfolio_weights": portfolio_weights,
             "reward": reward,
             "portfolio_return": portfolio_return,
-            "transaction_penality": transaction_penality
+            "transaction_penality": transaction_penality,
+            "downside_penalty": downside_penalty,
+            "log_returns": log_returns,
         }
         return observation, reward, terminated, truncated, info
 
@@ -131,8 +133,11 @@ class CustomEnv(gym.Env):
         # On calcule le rendement quotidien du portefeuille en utilisant les poids et les rendements des actifs
         current_prices = self.df.iloc[self.current_step].values
         previous_prices = self.df.iloc[self.current_step - 1].values
-        asset_returns = (current_prices - previous_prices) / previous_prices
-        portfolio_return = np.dot(portfolio_weights, asset_returns)
+        assets_returns = (current_prices - previous_prices) / previous_prices
+        assets_log_returns = np.log(current_prices / previous_prices)
+        log_returns = np.dot(portfolio_weights, assets_log_returns)
+        portfolio_return = np.dot(portfolio_weights, assets_returns)
+        downside_penalty = 0.5 * min(0, portfolio_return)**2
 
         # Penalite si changement de poids important (pour encourager la stabilité du portefeuille)
         if self.current_step == self.window_size:
@@ -140,7 +145,7 @@ class CustomEnv(gym.Env):
         else:
             weight_change = np.sum(np.abs(portfolio_weights - self.weights)) #L1 norm
             transaction_penality = weight_change * penality_factor
-        return portfolio_return, transaction_penality
+        return portfolio_return, transaction_penality, downside_penalty, log_returns\
 
     def render(self):
         return

@@ -131,7 +131,7 @@ def test(seed: int):
         df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
     total_cumulative_return = 1.0
     total_cum_return_hold = 1.0
-    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H-%M')}")
+    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_seed_{seed}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}")
     step = 0
     step_daily_return = window_size
 

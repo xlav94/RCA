@@ -22,7 +22,7 @@ def load_config(config_path: str = "/config.ini"):
     config.read(config_path)
     #print(config.sections())
     model_cfg = {
-        "seed": config.getint("MODEL", "SEED"),
+        "seed": config.getint("MODEL", "TEST_SEED"),
     }
 
     env_cfg = {
@@ -99,7 +99,6 @@ def extract_scalar_from_subdir(parent_dir: str, folder_name: str, column_name: s
 
     tag = tags[0]
     scalars = event_acc.Scalars(tag)
-
     return pd.DataFrame({
         "step": [e.step for e in scalars],
         column_name: [e.value for e in scalars]
@@ -153,6 +152,109 @@ def build_results_df_from_tensorboard(log_dir: str) -> pd.DataFrame:
 
     return results_df
 
+def extract_cumulative_return(log_dir, agent=True):
+    if agent:
+        folder = "Comparison_Cumulative_Return_Agent_PPO"
+        col = "agent_cumulative_return"
+    else:
+        folder = "Comparison_Cumulative_Return_Buy_and_Hold"
+        col = "benchmark_cumulative_return"
+
+    path = os.path.join(log_dir, folder)
+
+    event_acc = EventAccumulator(path)
+    event_acc.Reload()
+
+    tag = event_acc.Tags()["scalars"][0]
+    scalars = event_acc.Scalars(tag)
+
+    return pd.DataFrame({
+        "step": [e.step for e in scalars],
+        col: [e.value for e in scalars]
+    })
+
+def build_mean_from_tensorboard(log_dirs):
+    dfs = []
+
+    for i, log_dir in enumerate(log_dirs):
+        df_agent = extract_cumulative_return(log_dir, agent=True)
+
+        df_agent = df_agent.rename(columns={
+            "agent_cumulative_return": f"agent_model_{i}"
+        })
+
+        dfs.append(df_agent)
+
+    # Merge sur step
+    merged = dfs[0]
+    for df in dfs[1:]:
+        merged = pd.merge(merged, df, on="step", how="inner")
+
+    agent_cols = [c for c in merged.columns if c.startswith("agent_model_")]
+
+    # Mean + std
+    merged["agent_cumulative_return_mean"] = merged[agent_cols].mean(axis=1)
+    merged["agent_cumulative_return_std"] = merged[agent_cols].std(axis=1)
+
+    # Benchmark (prendre depuis le premier run)
+    df_benchmark = extract_cumulative_return(log_dirs[0], agent=False)
+    merged = pd.merge(merged, df_benchmark, on="step", how="inner")
+
+    return merged
+
+def plot_normalized_vs_raw(mean_raw_df, mean_norm_df, save_path=None):
+    plt.figure(figsize=(12, 6))
+
+    # agent raw cum_return
+    sns.lineplot(
+        x=mean_raw_df["step"],
+        y=mean_raw_df["agent_cumulative_return_mean"],
+        label="PPO mean (raw env)"
+    )
+
+    # agent norm cum_return
+    sns.lineplot(
+        x=mean_norm_df["step"],
+        y=mean_norm_df["agent_cumulative_return_mean"],
+        label="PPO mean (normalized env)"
+    )
+
+    # Benchmark cum_return
+    sns.lineplot(
+        x=mean_raw_df["step"],
+        y=mean_raw_df["benchmark_cumulative_return"],
+        label="Buy & Hold",
+        linestyle="--"
+    )
+
+    # Raw std
+    plt.fill_between(
+        mean_raw_df["step"],
+        mean_raw_df["agent_cumulative_return_mean"] - mean_raw_df["agent_cumulative_return_std"],
+        mean_raw_df["agent_cumulative_return_mean"] + mean_raw_df["agent_cumulative_return_std"],
+        alpha=0.15
+    )
+
+    # Norm std
+    plt.fill_between(
+        mean_norm_df["step"],
+        mean_norm_df["agent_cumulative_return_mean"] - mean_norm_df["agent_cumulative_return_std"],
+        mean_norm_df["agent_cumulative_return_mean"] + mean_norm_df["agent_cumulative_return_std"],
+        alpha=0.15
+    )
+
+    plt.axhline(0, linestyle="--", color="black")
+    plt.title("Mean Cumulative Return: Raw vs Normalized Environments")
+    plt.xlabel("Step")
+    plt.ylabel("Cumulative Return")
+    plt.legend()
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    plt.show()
+
 def plot_cumulative_returns(results_df: pd.DataFrame, save_path: str = None, show: bool = True):
     """
     Trace la performance cumulée de l'agent vs benchmark.
@@ -188,28 +290,31 @@ def plot_cumulative_returns(results_df: pd.DataFrame, save_path: str = None, sho
     else:
         plt.close()
 
-
-def plot_daily_profit(results_df: pd.DataFrame, save_path: str = None, show: bool = True):
+def build_mean_cumulative_return_df(results_dfs):
     """
-    Histogramme / densité simple des rendements journaliers de l'agent.
+    Build a DataFrame with:
+    - step
+    - mean cumulative return across models
+    - std cumulative return across models
+    - benchmark cumulative return
     """
-    plt.figure(figsize=(10, 5))
+    merged = results_dfs[0][["step", "benchmark_cumulative_return"]].copy()
 
-    sns.histplot(results_df["agent_daily_return"], bins=40, kde=True)
+    for i, df in enumerate(results_dfs):
+        merged = merged.merge(
+            df[["step", "agent_cumulative_return"]].rename(
+                columns={"agent_cumulative_return": f"agent_cumulative_return_model_{i+1}"}
+            ),
+            on="step",
+            how="inner"
+        )
 
-    plt.title("Distribution of Agent Daily Returns")
-    plt.xlabel("Daily Return")
-    plt.ylabel("Frequency")
-    plt.tight_layout()
+    agent_cols = [c for c in merged.columns if c.startswith("agent_cumulative_return_model_")]
 
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    merged["agent_cumulative_return_mean"] = merged[agent_cols].mean(axis=1)
+    merged["agent_cumulative_return_std"] = merged[agent_cols].std(axis=1)
 
-    if show:
-        plt.show()
-    else:
-        plt.close()
-
+    return merged
 
 def plot_portfolio_weights_interactive(results_df, stocks, save_path_html=None):
     fig = go.Figure()
@@ -270,121 +375,6 @@ def plot_portfolio_weights_interactive(results_df, stocks, save_path_html=None):
         fig.write_html(save_path_html)
 
     fig.show()
-
-def plot_portfolio_weights_small_multiples(
-    results_df,
-    stocks,
-    save_path=None,
-    ncols=1,
-    figsize_per_row=(12, 2.2)
-):
-    """
-    Crée un graphique 'small multiples':
-    - un sous-graphe par actif
-    - l'actif concerné est mis en évidence en noir
-    - les autres sont en gris clair
-    """
-
-    sns.set_theme(style="whitegrid")
-
-    n_assets = len(stocks)
-    nrows = math.ceil(n_assets / ncols)
-
-    fig, axes = plt.subplots(
-        nrows=nrows,
-        ncols=ncols,
-        figsize=(figsize_per_row[0] * ncols, figsize_per_row[1] * nrows),
-        sharex=True,
-        sharey=True
-    )
-
-    if n_assets == 1:
-        axes = [axes]
-    elif ncols == 1:
-        axes = list(axes)
-    else:
-        axes = axes.flatten()
-
-    x = results_df["step"]
-
-    for idx, stock_highlight in enumerate(stocks):
-        ax = axes[idx]
-
-        # Toutes les autres courbes en gris
-        for stock in stocks:
-            ax.plot(
-                x,
-                results_df[f"weight_{stock}"],
-                color="lightgray",
-                linewidth=1.0,
-                alpha=0.8,
-                drawstyle="steps-post"
-            )
-
-        # Courbe mise en évidence
-        ax.plot(
-            x,
-            results_df[f"weight_{stock_highlight}"],
-            color="black",
-            linewidth=1.8,
-            alpha=1.0,
-            drawstyle="steps-post"
-        )
-
-        ax.set_title(stock_highlight, loc="left", fontsize=10)
-        ax.set_ylim(0, 0.105)
-        ax.grid(True, alpha=0.3)
-
-        # Alléger visuellement
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-
-    # Supprimer axes inutilisés si la grille est plus grande que le nb d'actifs
-    for j in range(n_assets, len(axes)):
-        fig.delaxes(axes[j])
-
-    fig.supxlabel("Time Step", fontsize=11)
-    fig.supylabel("Portfolio Weight", fontsize=11)
-    fig.suptitle("Portfolio Allocation Small Multiples", fontsize=13, y=0.995)
-
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    plt.show()
-
-def plot_allocation_heatmap(results_df, stocks, save_path=None, show=True):
-    """
-    Heatmap of portfolio weights over time.
-    Rows = assets
-    Columns = time steps
-    Color = allocated weight
-    """
-    weight_cols = [f"weight_{stock}" for stock in stocks]
-    heatmap_data = results_df[weight_cols].copy().T
-    heatmap_data.index = stocks
-
-    plt.figure(figsize=(14, 6))
-    sns.heatmap(
-        heatmap_data,
-        cmap="YlGnBu",
-        cbar_kws={"label": "Portfolio Weight"},
-        xticklabels=False
-    )
-
-    plt.title("Portfolio Allocation Heatmap")
-    plt.xlabel("Time Step")
-    plt.ylabel("Assets")
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
 
 def plot_cumulative_transaction_cost(results_df, save_path=None, show=True):
     """
@@ -515,80 +505,6 @@ def plot_risk_return_scatter(results_df, df_test, stocks, window_size, save_path
 
     return scatter_df
 
-def compute_strategy_ratios(results_df, risk_free_rate=0.0, ann_factor=252):
-    """
-    Compute Sharpe and Sortino ratios for agent and Buy&Hold
-    """
-    agent_returns = results_df["agent_daily_return"].dropna().values
-    benchmark_returns = results_df["benchmark_daily_return"].dropna().values
-
-    # Daily risk-free rate
-    rf_daily = risk_free_rate / ann_factor
-
-    def sharpe_ratio(returns):
-        excess_returns = returns - rf_daily
-        vol = np.std(excess_returns, ddof=1)
-        if vol == 0:
-            return np.nan
-        return np.sqrt(ann_factor) * np.mean(excess_returns) / vol
-
-    def sortino_ratio(returns):
-        excess_returns = returns - rf_daily
-        downside = excess_returns[excess_returns < 0]
-        if len(downside) == 0:
-            return np.nan
-        downside_std = np.std(downside, ddof=1)
-        if downside_std == 0:
-            return np.nan
-        return np.sqrt(ann_factor) * np.mean(excess_returns) / downside_std
-
-    ratios_df = pd.DataFrame({
-        "Strategy": ["PPO Agent", "Buy & Hold"],
-        "Sharpe Ratio": [
-            sharpe_ratio(agent_returns),
-            sharpe_ratio(benchmark_returns)
-        ],
-        "Sortino Ratio": [
-            sortino_ratio(agent_returns),
-            sortino_ratio(benchmark_returns)
-        ]
-    })
-
-    return ratios_df
-
-def plot_strategy_ratios(ratios_df, save_path=None, show=True):
-    """
-    Bar plot of Sharpe and Sortino ratios for PPO Agent and Buy & Hold.
-    """
-    plot_df = ratios_df.melt(
-        id_vars="Strategy",
-        value_vars=["Sharpe Ratio", "Sortino Ratio"],
-        var_name="Metric",
-        value_name="Value"
-    )
-
-    plt.figure(figsize=(9, 5))
-    sns.barplot(
-        data=plot_df,
-        x="Metric",
-        y="Value",
-        hue="Strategy"
-    )
-
-    plt.title("Risk-Adjusted Performance: Sharpe and Sortino Ratios")
-    plt.xlabel("")
-    plt.ylabel("Ratio")
-    plt.axhline(0, linestyle="--", linewidth=1, color="black")
-    plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
-
 def compute_rolling_sharpe_sortino(results_df, window=60, risk_free_rate=0.0, ann_factor=252):
     """
     Rolling Sharpe and Sortino for both strategies.
@@ -702,7 +618,7 @@ def main():
     stocks = env_cfg["stocks"]
     window_size = env_cfg["window_size"]
 
-    log_path = "tensorboard_logs/test_results_2026-03-22-2136"
+    log_path = "tensorboard_logs/test_results_seed_4_2026-03-27-15-51"
     results_df = build_results_df_from_tensorboard(log_path)
 
 
@@ -720,28 +636,37 @@ def main():
         show=True
     )
 
-    plot_daily_profit(
-        results_df,
-        save_path=f"{plots_dir}/daily_return_distribution.png",
-        show=True
+    log_dirs_norm = [
+        "tensorboard_logs/test_results_seed_4_2026-03-27-15-51",
+        "tensorboard_logs/test_results_seed_13_2026-03-27-16-04",
+        "tensorboard_logs/test_results_seed_21_2026-03-27-16-00",
+        "tensorboard_logs/test_results_seed_42_2026-03-27-17-06",
+        "tensorboard_logs/test_results_seed_2300_2026-03-27-16-03",
+    ]
+
+    log_dirs_raw =[
+        "tensorboard_logs/test_results_seed_4_2026-03-27-16-55",
+        "tensorboard_logs/test_results_seed_13_2026-03-27-16-59",
+        "tensorboard_logs/test_results_seed_21_2026-03-27-16-58",
+        "tensorboard_logs/test_results_seed_42_2026-03-27-16-49",
+        "tensorboard_logs/test_results_seed_2300_2026-03-27-16-58"
+    ]
+
+    mean_raw_df = build_mean_from_tensorboard(log_dirs_raw)
+    mean_norm_df = build_mean_from_tensorboard(log_dirs_norm)
+
+    mean_norm_df.to_csv(f"{plots_dir}/5_models_mean.csv", index=False)
+
+    plot_normalized_vs_raw(
+        mean_raw_df,
+        mean_norm_df,
+        save_path=f"{plots_dir}/raw_vs_normalized_mean_cumulative_return.png"
     )
 
     plot_portfolio_weights_interactive(
         results_df,
         stocks=stocks,
         save_path_html=f"{plots_dir}/portfolio_weights_interactive.html"
-    )
-
-    plot_portfolio_weights_small_multiples(
-        results_df,
-        stocks=stocks,
-        save_path=f"{plots_dir}/portfolio_weights_multiple_plots.png"
-    )
-
-    plot_allocation_heatmap(
-        results_df,
-        stocks=stocks,
-        save_path=f"{plots_dir}/allocation_heatmap.png"
     )
 
     plot_cumulative_transaction_cost(

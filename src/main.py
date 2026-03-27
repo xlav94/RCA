@@ -120,7 +120,7 @@ def test(seed: int):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = PPO.load('models/mul_PMPT_20M_norm/PPO_agent_checkpoints_seed_42_2026-03-26-01-56/PPO_agent_20000000_steps.zip', env=env_test, device=device)
-    #model = SAC.load('models/sac_agent_1000000_2026-03-16-23:18.zip', env=env_test, device=device)
+    #model = SAC.load('models/sac_agent_1000000_2026-03-16-23-18.zip', env=env_test, device=device)
 
     obs = env_test.reset()
     done = False

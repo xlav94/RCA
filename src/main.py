@@ -1,5 +1,4 @@
 import configparser
-import zipfile
 from datetime import datetime
 import os
 import random
@@ -31,10 +30,11 @@ num_cpu           = config.getint('MODEL', 'NUM_CPU')
 checkpoint        = config.getboolean('MODEL', 'CHECKPOINT')
 
 # Configuration parameters for the environment
-stocks      = config.get('ENV','STOCKS').split(',')
-window_size = config.getint('ENV', 'WINDOW_SIZE')
-env_name    = config.get('ENV', 'ENV_NAME')
-objective   = config.get('ENV', 'OBJECTIVE')
+stocks            = config.get('ENV','STOCKS').split(',')
+window_size       = config.getint('ENV', 'WINDOW_SIZE')
+env_name          = config.get('ENV', 'ENV_NAME')
+objective         = config.get('ENV', 'OBJECTIVE')
+normalize         = config.getboolean('ENV', 'NORMALIZE')
 
 df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28').get_env_data(feature='Open')
 train_size = int(len(df) * 0.8)
@@ -63,16 +63,17 @@ def train(algo, train_seed=None):
 
     vec_env = VecMonitor(vec_env)
 
-    vec_env = VecNormalize(
-        vec_env,
-        training=True,
-        norm_obs=True,
-        norm_reward=True,
-        clip_reward=10.0,
-    )
+    if normalize:
+        vec_env = VecNormalize(
+            vec_env,
+            training=True,
+            norm_obs=True,
+            norm_reward=True,
+            clip_reward=10.0,
+        )
 
     if checkpoint:
-        checkpoint_dir = f"models/{algo}_agent_checkpoints_seed_{train_seed}_{datetime.now().strftime('%Y-%m-%d-%H:%M')}/"
+        checkpoint_dir = f"models/{algo}_agent_checkpoints_seed_{train_seed}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}/"
         checkpoint_callback = CheckpointCallback(
             save_freq=max(1, 5_000_000 // num_cpu),
             save_path=checkpoint_dir,
@@ -91,7 +92,7 @@ def train(algo, train_seed=None):
                     total_timesteps=total_timesteps,
                     callback=checkpoint_callback
                         )
-        model.save(f'models/ppo_agent_{total_timesteps}_seed_{train_seed}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
+        model.save(f'models/ppo_agent_{total_timesteps}_seed_{train_seed}_{datetime.now().strftime("%Y-%m-%d-%H-%M")}')
 
     elif algo == 'SAC':
         print("SAC selected for training.")
@@ -101,22 +102,24 @@ def train(algo, train_seed=None):
                     total_timesteps=total_timesteps,
                     callback=checkpoint_callback
                     )
-        model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H:%M")}')
+        model.save(f'models/sac_agent_{total_timesteps}_{datetime.now().strftime("%Y-%m-%d-%H-%M")}')
 
-    vec_env.save(f'models/envs/{algo}_seed_{train_seed}_env.pkl')
+    if normalize:
+        vec_env.save(f'models/envs/{algo}_seed_{train_seed}_env.pkl')
 
 
 def test(seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
     env_test.reset(seed=seed)
 
-    env_test = DummyVecEnv([lambda: env_test])
-    env_test = VecNormalize.load(f'envs/PPO_env.pkl', env_test)
-    env_test.training = False
-    env_test.norm_reward = False
+    if normalize:
+        env_test = DummyVecEnv([lambda: env_test])
+        env_test = VecNormalize.load(f'models/mul_PMPT_20M_norm/envs/PPO_seed_42_env.pkl', env_test)
+        env_test.training = False
+        env_test.norm_reward = False
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/ppo_agent_PMPT_10M.zip', env=env_test, device=device)
+    model = PPO.load('models/mul_PMPT_20M_norm/PPO_agent_checkpoints_seed_42_2026-03-26-01-56/PPO_agent_20000000_steps.zip', env=env_test, device=device)
     #model = SAC.load('models/sac_agent_1000000_2026-03-16-23:18.zip', env=env_test, device=device)
 
     obs = env_test.reset()
@@ -128,7 +131,7 @@ def test(seed: int):
         df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
     total_cumulative_return = 1.0
     total_cum_return_hold = 1.0
-    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H:%M')}")
+    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H-%M')}")
     step = 0
     step_daily_return = window_size
 

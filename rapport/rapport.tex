@@ -1,5 +1,6 @@
 \documentclass[final]{article}
 \usepackage{svg}
+\usepackage{float}
 
 % if you need to pass options to natbib, use, e.g.:
 %     \PassOptionsToPackage{numbers, compress}{natbib}
@@ -267,21 +268,24 @@ The learned policy is evaluated through a backtesting procedure on the out-of-sa
 
 Preliminary results indicate that the agent progressively learns non-trivial allocation strategies and dynamically adjusts portfolio weights according to market conditions, generating positive yield. The evolution of portfolio weights during the test phase illustrates how the agent adapts its allocation decisions. Thanks to the transaction penalty, the shifts across the 11 assets are purposeful and stable, proving the agent avoids pure speculation. Furthermore, as evidenced in Figure~\ref{fig:returns}, the agent maintains a steady upward trajectory and successfully outperforms the buy-and-hold baseline in cumulative returns, demonstrating an ability to capture market upside while strategically managing exposure.
 
-\begin{figure}[h!]
+The interactive HTML version of Figure~\ref{fig:weights} was generated using Plotly. It can be accessed separately via the following local file:
+\href{run:../src/plots/portfolio_weights_interactive_20260314-223522.html}{src/plots/portfolio\_weights\_interactive\_20260314-223522.html}.
+
+
+\begin{figure}[H]
     \centering
-    \begin{minipage}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{Allocation_Portfolio_Weights.png}
-        \caption{Dynamic portfolio allocation.}
-        \label{fig:weights}
-    \end{minipage}\hfill
-    \begin{minipage}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{Comparison_Cumulative_Return.png}
-        \caption{Cumulative return.}
-        \label{fig:returns}
-    \end{minipage}
+    \includegraphics[width=0.95\linewidth]{../src/plots/portfolio_weights.png}
+    \caption{Static view of the portfolio allocation over time.}
+    \label{fig:weights}
+
+    \vspace{0.5cm}
+
+    \includegraphics[width=0.95\linewidth]{../src/plots/cumulative_return_20260314-231915.png}
+    \caption{Cumulative return of the PPO agent compared with the buy-and-hold benchmark.}
+    \label{fig:returns}
 \end{figure}
+
+
 \subsection{Future Directions}
 
 Moving forward, we plan to enhance the system's performance and robustness through three primary avenues. First, we intend to explore \textbf{alternative Deep Reinforcement Learning (DRL) algorithms} to compare their stability and convergence against our current PPO baseline. Second, we will focus on \textbf{feature engineering}, incorporating stationary technical indicators and risk-adjusted metrics into the observation space to provide the agent with richer market context. Finally, we will conduct systematic \textbf{hyperparameter tuning} of the model architecture and training process to optimize for long-term Sharpe ratios and more effective risk management.

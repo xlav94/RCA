@@ -227,22 +227,6 @@ def plot_normalized_vs_raw(mean_raw_df, mean_norm_df, save_path=None):
         linestyle="--"
     )
 
-    # Raw std
-    plt.fill_between(
-        mean_raw_df["step"],
-        mean_raw_df["agent_cumulative_return_mean"] - mean_raw_df["agent_cumulative_return_std"],
-        mean_raw_df["agent_cumulative_return_mean"] + mean_raw_df["agent_cumulative_return_std"],
-        alpha=0.15
-    )
-
-    # Norm std
-    plt.fill_between(
-        mean_norm_df["step"],
-        mean_norm_df["agent_cumulative_return_mean"] - mean_norm_df["agent_cumulative_return_std"],
-        mean_norm_df["agent_cumulative_return_mean"] + mean_norm_df["agent_cumulative_return_std"],
-        alpha=0.15
-    )
-
     plt.axhline(0, linestyle="--", color="black")
     plt.title("Mean Cumulative Return: Raw vs Normalized Environments")
     plt.xlabel("Step")
@@ -618,7 +602,7 @@ def main():
     stocks = env_cfg["stocks"]
     window_size = env_cfg["window_size"]
 
-    log_path = "tensorboard_logs/test_results_seed_4_2026-03-27-15-51"
+    log_path = "tensorboard_logs/test_results_seed_4_2026-03-27-16-55"
     results_df = build_results_df_from_tensorboard(log_path)
 
 
@@ -644,7 +628,7 @@ def main():
         "tensorboard_logs/test_results_seed_2300_2026-03-27-16-03",
     ]
 
-    log_dirs_raw =[
+    log_dirs_raw = [
         "tensorboard_logs/test_results_seed_4_2026-03-27-16-55",
         "tensorboard_logs/test_results_seed_13_2026-03-27-16-59",
         "tensorboard_logs/test_results_seed_21_2026-03-27-16-58",
@@ -656,6 +640,7 @@ def main():
     mean_norm_df = build_mean_from_tensorboard(log_dirs_norm)
 
     mean_norm_df.to_csv(f"{plots_dir}/5_models_mean.csv", index=False)
+    mean_raw_df.to_csv(f"{plots_dir}/5_models_mean_raw.csv", index=False)
 
     plot_normalized_vs_raw(
         mean_raw_df,

@@ -119,10 +119,10 @@ def test(seed: int):
         env_test.norm_reward = False
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/mul_PMPT_20M_norm/PPO_agent_checkpoints_seed_42_2026-03-26-01-56/PPO_agent_20000000_steps.zip', env=env_test, device=device)
+    model = PPO.load('models/mul_PMPT_20M/ppo_agent_20000000_2026-03-23-23-56.zip', env=env_test, device=device)
     #model = SAC.load('models/sac_agent_1000000_2026-03-16-23-18.zip', env=env_test, device=device)
 
-    obs = env_test.reset()
+    obs, _ = env_test.reset()
     done = False
 
     print(f"Début du test sur {len(df_test)} points de données...")
@@ -137,9 +137,9 @@ def test(seed: int):
 
     while not done:
         action, _ = model.predict(obs, deterministic=True)
-        obs, reward, dones, info = env_test.step(action)
+        obs, reward, terminated, truncated, info = env_test.step(action)
 
-        total_cumulative_return *= (1 + info[0]["portfolio_return"])
+        total_cumulative_return *= (1 + info["portfolio_return"])
 
         daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step_daily_return].mean()
         total_cum_return_hold *= (1 + daily_market_return)
@@ -148,14 +148,14 @@ def test(seed: int):
             "Buy_and_Hold": total_cum_return_hold - 1
         }, step)
 
-        writer.add_scalar("Performance/Daily_return", info[0]["portfolio_return"], step)
-        writer.add_scalar("Performance/Transaction_penality", info[0]["transaction_penality"], step)
-        weights_dict = {stocks[i]: float(info[0]["portfolio_weights"][i]) for i in range(len(stocks))}
+        writer.add_scalar("Performance/Daily_return", info["portfolio_return"], step)
+        writer.add_scalar("Performance/Transaction_penality", info["transaction_penality"], step)
+        weights_dict = {stocks[i]: float(info["portfolio_weights"][i]) for i in range(len(stocks))}
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
         step += 1
         step_daily_return += 1
-        done = dones[0]
+        done = terminated or truncated
 
     writer.close()
     print(f"Test terminé. Profit final: {(total_cumulative_return - 1) * 100:.2f}%")

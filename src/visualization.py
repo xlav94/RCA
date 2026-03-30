@@ -173,11 +173,19 @@ def extract_cumulative_return(log_dir, agent=True):
         col: [e.value for e in scalars]
     })
 
-def build_mean_from_tensorboard(log_dirs):
+def build_mean_from_tensorboard(log_dirs, results_df):
     dfs = []
 
     for i, log_dir in enumerate(log_dirs):
         df_agent = extract_cumulative_return(log_dir, agent=True)
+
+        # sort to ensure correct diff
+        df_agent = df_agent.sort_values("step").reset_index(drop=True)
+
+        # compute daily returns from cumulative returns
+        df_agent[f"agent_daily_return_{i}"] = (
+            df_agent["agent_cumulative_return"].pct_change()
+        )
 
         df_agent = df_agent.rename(columns={
             "agent_cumulative_return": f"agent_model_{i}"
@@ -190,14 +198,26 @@ def build_mean_from_tensorboard(log_dirs):
     for df in dfs[1:]:
         merged = pd.merge(merged, df, on="step", how="inner")
 
+    # cumulative return columns
     agent_cols = [c for c in merged.columns if c.startswith("agent_model_")]
 
-    # Mean + std
+    # daily return columns
+    daily_cols = [c for c in merged.columns if c.startswith("agent_daily_return_")]
+
+    # Mean + std (cumulative)
     merged["agent_cumulative_return_mean"] = merged[agent_cols].mean(axis=1)
     merged["agent_cumulative_return_std"] = merged[agent_cols].std(axis=1)
 
+    # Mean (daily returns)
+    merged["agent_daily_return_mean"] = merged[daily_cols].mean(axis=1).fillna(0)
+
     # Benchmark (prendre depuis le premier run)
     df_benchmark = extract_cumulative_return(log_dirs[0], agent=False)
+    df_benchmark = df_benchmark.sort_values("step").reset_index(drop=True)
+
+    # benchmark daily returns
+    benchmark_cols = ["step", "benchmark_cumulative_return", "benchmark_daily_return"]
+    df_benchmark = results_df[benchmark_cols]
     merged = pd.merge(merged, df_benchmark, on="step", how="inner")
 
     return merged
@@ -299,66 +319,6 @@ def build_mean_cumulative_return_df(results_dfs):
     merged["agent_cumulative_return_std"] = merged[agent_cols].std(axis=1)
 
     return merged
-
-def plot_portfolio_weights_interactive(results_df, stocks, save_path_html=None):
-    fig = go.Figure()
-    colors = px.colors.qualitative.Plotly
-
-    # Traces normales, chacune avec sa propre couleur
-    for i, stock in enumerate(stocks):
-        fig.add_trace(
-            go.Scatter(
-                x=results_df["step"],
-                y=results_df[f"weight_{stock}"],
-                mode="lines",
-                name=stock,
-                line=dict(
-                    color=colors[i % len(colors)],
-                    width=2.5
-                ),
-                opacity=1.0,
-                line_shape="hv",   # plus lisible pour des poids qui changent par paliers
-                hovertemplate=(
-                    f"<b>{stock}</b><br>"
-                    "Step: %{x}<br>"
-                    "Weight: %{y:.4f}<extra></extra>"
-                )
-            )
-        )
-
-
-
-    fig.update_layout(
-        title="Portfolio Allocation Over Time",
-        xaxis_title="Time Step",
-        yaxis_title="Weight",
-        template="plotly_white",
-        hovermode="x unified",
-        width=1500,
-        height=750,
-        legend_title="Assets",
-        updatemenus=[
-            dict(
-                type="dropdown",
-                direction="down",
-                x=1.02,
-                y=1.0,
-                xanchor="left",
-                yanchor="top",
-                showactive=True,
-            )
-        ],
-        margin=dict(l=60, r=220, t=80, b=60)
-    )
-
-    # Poids bornés à 0.10 dans ton env
-    fig.update_yaxes(range=[0, 0.105], tickformat=".3f")
-    fig.update_xaxes(rangeslider_visible=True)
-
-    if save_path_html is not None:
-        fig.write_html(save_path_html)
-
-    fig.show()
 
 def plot_cumulative_transaction_cost(results_df, save_path=None, show=True):
     """
@@ -489,75 +449,47 @@ def plot_risk_return_scatter(results_df, df_test, stocks, window_size, save_path
 
     return scatter_df
 
-def compute_rolling_sharpe_sortino(results_df, window=60, risk_free_rate=0.0, ann_factor=252):
+def compute_sharpe_ratio(results_df):
     """
-    Rolling Sharpe and Sortino for both strategies.
+    Compute Sharpe ratio for agent and Buy&Hold
     """
-    rf_daily = risk_free_rate / ann_factor
-    df = results_df.copy()
+    agent_returns = results_df["agent_cumulative_return_mean"].dropna().values
+    benchmark_returns = results_df["benchmark_cumulative_return"].dropna().values
+    #agent_returns = results_df["agent_daily_return_mean"].dropna().values
+    #benchmark_returns = results_df["benchmark_daily_return"].dropna().values
 
-    def rolling_sharpe(series):
-        def f(x):
-            excess = x - rf_daily
-            vol = np.std(excess, ddof=1)
-            if vol == 0:
-                return np.nan
-            return np.sqrt(ann_factor) * np.mean(excess) / vol
-        return series.rolling(window).apply(f, raw=True)
+    excess_returns = agent_returns - benchmark_returns
+    vol = np.std(excess_returns, ddof=1)
+    if vol == 0:
+        return np.nan
+    return np.mean(excess_returns) / vol
 
-    def rolling_sortino(series):
-        def f(x):
-            excess = x - rf_daily
-            downside = excess[excess < 0]
-            if len(downside) < 2:
-                return np.nan
-            downside_std = np.std(downside, ddof=1)
-            if downside_std == 0:
-                return np.nan
-            return np.sqrt(ann_factor) * np.mean(excess) / downside_std
-        return series.rolling(window).apply(f, raw=True)
+def plot_raw_vs_norm_sharpe(raw_df, norm_df):
+    plt.figure(figsize=(12, 6))
 
-    df["agent_rolling_sharpe"] = rolling_sharpe(df["agent_daily_return"])
-    df["benchmark_rolling_sharpe"] = rolling_sharpe(df["benchmark_daily_return"])
+    plt.plot(raw_df["step"], raw_df["sharpe_mean"], label="Raw env")
+    plt.fill_between(
+        raw_df["step"],
+        raw_df["sharpe_mean"] - raw_df["sharpe_std"],
+        raw_df["sharpe_mean"] + raw_df["sharpe_std"],
+        alpha=0.2
+    )
 
-    df["agent_rolling_sortino"] = rolling_sortino(df["agent_daily_return"])
-    df["benchmark_rolling_sortino"] = rolling_sortino(df["benchmark_daily_return"])
+    plt.plot(norm_df["step"], norm_df["sharpe_mean"], label="Normalized env")
+    plt.fill_between(
+        norm_df["step"],
+        norm_df["sharpe_mean"] - norm_df["sharpe_std"],
+        norm_df["sharpe_mean"] + norm_df["sharpe_std"],
+        alpha=0.2
+    )
 
-    return df
-
-def plot_rolling_ratios(results_df, metric="sharpe", save_path=None, show=True):
-    """
-    Plot rolling Sharpe or Sortino ratio over time.
-    metric: "sharpe" or "sortino"
-    """
-    if metric == "sharpe":
-        agent_col = "agent_rolling_sharpe"
-        benchmark_col = "benchmark_rolling_sharpe"
-        title = "Rolling Sharpe Ratio"
-    elif metric == "sortino":
-        agent_col = "agent_rolling_sortino"
-        benchmark_col = "benchmark_rolling_sortino"
-        title = "Rolling Sortino Ratio"
-    else:
-        raise ValueError("metric must be 'sharpe' or 'sortino'")
-
-    plt.figure(figsize=(12, 5))
-    sns.lineplot(x=results_df["step"], y=results_df[agent_col], label="PPO Agent")
-    sns.lineplot(x=results_df["step"], y=results_df[benchmark_col], label="Buy & Hold")
-
-    plt.title(title)
-    plt.xlabel("Time Step")
-    plt.ylabel("Ratio")
-    plt.axhline(0, linestyle="--", linewidth=1, color="black")
+    plt.axhline(0, linestyle="--", color="black")
+    plt.title("Rolling Sharpe: Raw vs Normalized")
+    plt.xlabel("Step")
+    plt.ylabel("Sharpe Ratio")
+    plt.legend()
     plt.tight_layout()
-
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
+    plt.show()
 
 def compute_alpha(results_df, risk_free_rate=0.0, ann_factor=252):
     """
@@ -636,8 +568,12 @@ def main():
         "tensorboard_logs/test_results_seed_2300_2026-03-27-16-58"
     ]
 
-    mean_raw_df = build_mean_from_tensorboard(log_dirs_raw)
-    mean_norm_df = build_mean_from_tensorboard(log_dirs_norm)
+    mean_raw_df = build_mean_from_tensorboard(log_dirs_raw, results_df)
+    mean_norm_df = build_mean_from_tensorboard(log_dirs_norm, results_df)
+    #mean_sharpe_raw = build_mean_rolling_sharpe(log_dirs_raw)
+    #mean_sharpe_norm = build_mean_rolling_sharpe(log_dirs_norm)
+
+    #plot_raw_vs_norm_sharpe(mean_sharpe_raw, mean_sharpe_norm)
 
     mean_norm_df.to_csv(f"{plots_dir}/5_models_mean.csv", index=False)
     mean_raw_df.to_csv(f"{plots_dir}/5_models_mean_raw.csv", index=False)
@@ -646,12 +582,6 @@ def main():
         mean_raw_df,
         mean_norm_df,
         save_path=f"{plots_dir}/raw_vs_normalized_mean_cumulative_return.png"
-    )
-
-    plot_portfolio_weights_interactive(
-        results_df,
-        stocks=stocks,
-        save_path_html=f"{plots_dir}/portfolio_weights_interactive.html"
     )
 
     plot_cumulative_transaction_cost(
@@ -669,23 +599,13 @@ def main():
     )
     scatter_df.to_csv(f"{plots_dir}/risk_return_scatter.csv", index=False)
 
-    # Sortino and sharpe ratios
-    rolling_df = compute_rolling_sharpe_sortino(results_df, window=60)
 
-    plot_rolling_ratios(
-        rolling_df,
-        metric="sharpe",
-        save_path=f"{plots_dir}/rolling_sharpe.png"
-    )
-
-    plot_rolling_ratios(
-        rolling_df,
-        metric="sortino",
-        save_path=f"{plots_dir}/rolling_sortino.png"
-    )
+    sharpe = compute_sharpe_ratio(mean_raw_df)
+    print(f"Sharpe ratio: {sharpe}")
 
     alpha = compute_alpha(results_df)
 
+    print('====================================')
     print(f"Alpha (annual): {alpha:.4f}")
     if alpha < 0:
         print("Agent sous-performe le buy&hold")
@@ -693,6 +613,7 @@ def main():
         print("Agent performance ~ buy&hold performance")
     else :
         print("Agent sur-performe le sell&hold")
+    print('====================================')
 
     final_agent_return = results_df["agent_cumulative_return"].iloc[-1] * 100
     final_benchmark_return = results_df["benchmark_cumulative_return"].iloc[-1] * 100

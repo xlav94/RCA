@@ -5,7 +5,7 @@ from scipy.optimize import minimize
 from scipy.special import softmax
 from sklearn.covariance import LedoitWolf
 
-from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax
+from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax, objective_mpt_jax
 
 
 class CustomEnv(gym.Env):
@@ -91,28 +91,16 @@ class CustomEnv(gym.Env):
 
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.pct_change().dropna()
-
-            lw = LedoitWolf().fit(returns)
-            cov_matrix = lw.covariance_
             mu = action
             num_assets = self.num_assets
             initial_weights = np.full(num_assets, 1 / num_assets)
-
-            constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
-            bounds = tuple((lower_bound, upper_bound) for _ in range(num_assets))
-
-            def objective_MPT(weights, l=2.0):
-                port_return = np.dot(weights, mu)
-                port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
-                return -(port_return - port_risk)
-
             weights = None
 
             if self.objective == "MPT":
-                result = minimize(objective_MPT, initial_weights, method='SLSQP',
-                                  bounds=bounds, constraints=constraints,
-                                  options={'ftol': 1e-7, 'maxiter': 100})
-                weights = result.x
+                weights = self.po.minimize(objective_mpt_jax,
+                                           initial_weights,
+                                           mu,
+                                           returns)
             elif self.objective == "PMPT":
                 weights = self.po.minimize(objective_pmpt_jax,
                                       initial_weights,
@@ -171,4 +159,18 @@ result = minimize(objective_PMPT, initial_weights, method='SLSQP',
                   bounds=bounds, constraints=constraints,
                   jac=jacobian_PMPT,
                   options={'ftol': 1e-7, 'maxiter': 100})
+                  
+lw = LedoitWolf().fit(returns)
+            cov_matrix = lw.covariance_
+constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
+            bounds = tuple((lower_bound, upper_bound) for _ in range(num_assets))
+
+            def objective_MPT(weights, l=2.0):
+                port_return = np.dot(weights, mu)
+                port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
+                return -(port_return - port_risk)
+result = minimize(objective_MPT, initial_weights, method='SLSQP',
+                                  bounds=bounds, constraints=constraints,
+                                  options={'ftol': 1e-7, 'maxiter': 100})
+                weights = result.x
 """

@@ -19,7 +19,7 @@ if __name__ == "__main__":
         train(algo_type, train_seed=train_seed)
     else:
         # --- UPADATE THESE PATHS FOR TESTING ---
-        env= 'models/<path_to_env>'
+        env = 'models/<path_to_env>'
         model = 'models/<path_to_model>'
         # ----------------------------------------
         
@@ -78,7 +78,7 @@ git clone git@github.com:<username>/RCA.git
 ``` 
 #### Copy code to cluster
 ```bash
-rsync -a RCA ~/scratch/code-snapshots/ --exclude .git
+rsync -a ~/RCA ~/scratch/code-snapshots/ --exclude .git
 ```
 #### Copy sbatch script to cluster
 ```bash
@@ -87,12 +87,12 @@ rsync ~/RCA/script.sh sbatch
 
 ### Run Sbatch
 ```bash
-sbatch sbatch/script.sh ~/scratch/code-snapshots/RCA
+sbatch ~/sbatch/script.sh ~/scratch/code-snapshots/RCA
 ```
 #### See output or error logs in `~/scratch/logs/`.
 ```bash
-tail -f scratch/logs/slurm-<job_id>-rca.out
-tail -f scratch/logs/slurm-<job_id>-rca.error
+tail -f ~/scratch/logs/slurm-<job_id>-rca.out
+tail -f ~/scratch/logs/slurm-<job_id>-rca.error
 ```
 
 ### Outputs

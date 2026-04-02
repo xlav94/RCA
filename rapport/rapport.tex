@@ -1,6 +1,5 @@
 \documentclass[final]{article}
 \usepackage{svg}
-\usepackage{float}
 
 % if you need to pass options to natbib, use, e.g.:
 %     \PassOptionsToPackage{numbers, compress}{natbib}
@@ -9,7 +8,7 @@
 % The authors should use one of these tracks.
 % Before accepting by the NeurIPS conference, select one of the options below.
 % 0. "default" for submission
- \usepackage[preprint]{neurips_2025}
+ \usepackage{neurips_2025}
 % the "default" option is equal to the "main" option, which is used for the Main Track with double-blind reviewing.
 % 1. "main" option is used for the Main Track
 %  \usepackage[main]{neurips_2025}
@@ -61,9 +60,7 @@
 \usetikzlibrary{arrows.meta, positioning, calc, backgrounds, fit}
 \usepackage{amsmath}
 % Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote.
-\title{Rapport \\
-        Projet avancé en apprentissage automatique \\
-        IFT - 3710}
+\title{Deep Reinforcement Learning for Portfolio Allocation: A Post-Modern Portfolio Theory Approach}
 
 
 % The \author macro works with any number of authors. There are two commands
@@ -153,8 +150,6 @@ Recent work incorporates alternative data streams to enrich state representation
 \subsection{Risk-Aware Rewards and Responsible Management}
 
 To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
-
-\newpage
 
 \section{Developed Methods and Experimental Plan}
 
@@ -268,73 +263,59 @@ The learned policy is evaluated through a backtesting procedure on the out-of-sa
 
 Preliminary results indicate that the agent progressively learns non-trivial allocation strategies and dynamically adjusts portfolio weights according to market conditions, generating positive yield. The evolution of portfolio weights during the test phase illustrates how the agent adapts its allocation decisions. Thanks to the transaction penalty, the shifts across the 11 assets are purposeful and stable, proving the agent avoids pure speculation. Furthermore, as evidenced in Figure~\ref{fig:returns}, the agent maintains a steady upward trajectory and successfully outperforms the buy-and-hold baseline in cumulative returns, demonstrating an ability to capture market upside while strategically managing exposure.
 
-The interactive HTML version of Figure~\ref{fig:weights} was generated using Plotly. It can be accessed separately via the following local file:
-\href{run:../src/plots/portfolio_weights_interactive_20260314-223522.html}{src/plots/portfolio\_weights\_interactive\_20260314-223522.html}.
-
-
-\begin{figure}[H]
+\begin{figure}[h!]
     \centering
-    \includegraphics[width=0.95\linewidth]{../src/plots/portfolio_weights.png}
-    \caption{Static view of the portfolio allocation over time.}
-    \label{fig:weights}
-
-    \vspace{0.5cm}
-
-    \includegraphics[width=0.95\linewidth]{../src/plots/cumulative_return_20260314-231915.png}
-    \caption{Cumulative return of the PPO agent compared with the buy-and-hold benchmark.}
-    \label{fig:returns}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Allocation_Portfolio_Weights.png}
+        \caption{Dynamic portfolio allocation.}
+        \label{fig:weights}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{Comparison_Cumulative_Return.png}
+        \caption{Cumulative return.}
+        \label{fig:returns}
+    \end{minipage}\label{fig:figure}
 \end{figure}
-
 
 \subsection{Future Directions}
 
 Moving forward, we plan to enhance the system's performance and robustness through three primary avenues. First, we intend to explore \textbf{alternative Deep Reinforcement Learning (DRL) algorithms} to compare their stability and convergence against our current PPO baseline. Second, we will focus on \textbf{feature engineering}, incorporating stationary technical indicators and risk-adjusted metrics into the observation space to provide the agent with richer market context. Finally, we will conduct systematic \textbf{hyperparameter tuning} of the model architecture and training process to optimize for long-term Sharpe ratios and more effective risk management.
 
-\section{Allocation Optimization Formulations}
-$w$ = portfolio weights vector\\
-$\mu$ = expected returns vector (actions)\\
-$\Sigma$ = covariance matrix of returns\\
-$\lambda$ = risk aversion parameter\\
-$r_t$ = return vector at time t\\
-$N$ = number of sample observations\\
-$\epsilon$ = small constant to prevent division by zero\\
-$DR(w)$ = Downside Risk (Mean Semi-deviation) of the portfolio with weights $w$\\
+\section{Results}
+\subsection{Cumulative Return}
 
-\textbf{Modern Portfolio Theory Mean-variance Optimization} \\
-Quadratic Utility Function:
-$-\left[ w^T \mu - \frac{1}{2} \lambda (w^T \Sigma w) \right]$ \\
+Figure~\ref{fig:cumret_new} compares two training configurations, raw and normalized
+observation environments, against the equally-weighted buy-and-hold benchmark over
+approximately 800 trading days.
 
-\textbf{Post Modern Portfolio Theory Mean Semi-deviation Optmization} \\
-Mean-Semideviation Utility Function:
-$-\left[ w^T \mu - \lambda \sqrt{\frac{1}{N} \sum_{t=1}^{N} \min(0, r_t^T w)^2 + \epsilon} \right]$ \\
-Jacobian for Mean Semi-deviation Utility:
-$-\left[ \mu - \lambda \frac{ \sum_{t=1}^{N} \min(0, r_t w) r_t}{N DR(w)} \right]$ \\
-\textit{Using the Jacobian for the optimization is 27\% faster than without it during the training process.}
+The raw environment agent (blue) achieves a cumulative
+return of approximately 102\%, outperforming both the normalized environment (orange,
+$\sim$83\%) and the benchmark (green, $\sim$84\%). All three curves track closely
+through the first 300 steps, after which the raw agent progressively diverges upward,
+particularly from step 600 onward where the benchmark experiences a sharper drawdown
+that the agent largely avoids. The normalized environment, while producing lower
+returns, exhibits noticeably smoother and more stable behaviour throughout the test
+horizon, as its curve fluctuates less aggressively and stays closer to the benchmark
+trajectory. This stability-performance tradeoff suggests that observation normalization
+acts as an implicit regularizer: it reduces the variance of the learned policy at the
+cost of some upside capture, and may be preferable in risk-sensitive deployment
+settings where consistency matters more than peak return.
 
-
-\section{Portfolio Assets}
-\begin{table}[h!]
+\begin{figure}[h!]
     \centering
-    \caption{Breakdown of portfolio assets by sector.}
-    \label{tab:portfolio_assets}
-    \begin{tabular}{ll}
-        \toprule
-        \textbf{Assets} & \textbf{Sector} \\
-        \midrule
-        MSFT, GOOG, AMZN, AAPL & Technology \\
-        BRK-B, JPM, V & Financials \\
-        WMT, COST, PG & Consumer Staples \\
-        LLY, UNH & Healthcare \\
-        GLD, DBC & Commodities \\
-        UNP, CAT, LIN, NEE, AMT & Industrials \\
-        XOM, CVX & Energy \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+    \includegraphics[width=0.95\linewidth]{../src/plots/20260327-190807/raw_vs_normalized_mean_cumulative_return.png}
+    \caption{Mean cumulative return across seeds: raw vs.\ normalized environment,
+             compared against the equally-weighted buy-and-hold benchmark.}
+    \label{fig:cumret_new}
+\end{figure}
+
+\subsection{Conclusion}
+The results presented here demonstrate that coupling a PPO agent with a Post-Modern Portfolio Theory optimization objective offers a valuable allocation policy.
+Training is still ongoing, and the next steps will include evaluation across multiple seeds, extending timesteps, and broader ablation studies. Each of these directions not only represents a path to a stronger performance, but also a cleaner understanding of the design choices that truly drive the gains observed so far.
 
 \newpage
-
-
 \bibliographystyle{plainnat}
 \bibliography{references}
 \end{document}

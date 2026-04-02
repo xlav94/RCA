@@ -18,7 +18,7 @@ if __name__ == "__main__":
         seed_everything(train_seed)
         train(algo_type, train_seed=train_seed)
     else:
-        # --- UPADATE THESE PATHS FOR TESTING ---
+        # --- UPDATE THESE PATHS FOR TESTING ---
         env = 'models/<path_to_env>'
         model = 'models/<path_to_model>'
         # ----------------------------------------
@@ -66,7 +66,7 @@ This table details the hyperparameter settings and environment configurations us
 |           | `STOCKS`           | List of tickers included in the portfolio universe ('MSFT,GOOG,AMZN'). | `STRING` |
 |           | `WINDOW_SIZE`      | The size of the look-back period for historical data.                  | `INT`    |
 |           | `OBJECTIVE`        | Target performance metric ('MPT' or 'PMPT').                           | `STRING` |
-|           | `NORMALIZE`        | Whether to apply feature scaling to environment observations.          | `BOOL`   |
+|           | `NORMALIZE`        | Whether to normalize environment.                                      | `BOOL`   |
 
 ## Setup and Run in a Slurm Cluster
 
@@ -111,3 +111,29 @@ rsync -av ~/scratch/out/RCA_$TIMESTAMP/tensorboard_logs/PPO_<NUMBER> ~/RCA/tenso
 module purge
 pkill -u $USER
 ```
+
+## Project Structure
+```
+.
+└── RCA/
+    ├── data/
+    ├── models/
+    ├── rapport/
+    ├── src/
+    │   ├── __init__.py
+    │   ├── data.py
+    │   ├── env.py
+    │   ├── main.py
+    │   ├── model.py
+    │   ├── portfolio_optimizer.py
+    │   └── visualization.py
+    ├── tensorboard_logs/
+    ├── test/
+    │   ├── __init__.py
+    │   ├── test_data.py
+    │   ├── test_env.py
+    │   └── test_model.py
+    ├── config.ini
+    ├── README.md
+    ├── requirements.txt
+    └── script.sh

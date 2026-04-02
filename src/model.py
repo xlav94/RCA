@@ -118,7 +118,7 @@ def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
     )
 
     model = PPO("MultiInputPolicy", env,
-                learning_rate=linear_schedule(config.getfloat('PPO', 'LEARNING_RATE')),
+                learning_rate=config.getfloat('PPO', 'LEARNING_RATE'),
                 n_steps=config.getint('PPO', 'N_STEPS'),
                 batch_size=config.getint('PPO', 'BATCH_SIZE'),
                 n_epochs=config.getint('PPO', 'N_EPOCHS'),

@@ -1,5 +1,8 @@
 # Deep Reinforcement Learning for Portfolio Allocation: A Post-Modern Portfolio Theory Approach
 
+![Python 3.11 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.13-blue.svg)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)
+
 ## Getting started
 ### Installation
 ```bash

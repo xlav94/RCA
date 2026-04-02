@@ -4,7 +4,6 @@ import os
 import random
 import numpy as np
 import pandas as pd
-
 import torch
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -108,21 +107,25 @@ def train(algo, train_seed=None):
         vec_env.save(f'models/envs/{algo}_seed_{train_seed}_env.pkl')
 
 
-def test(seed: int):
+def test(algo, model_path, env_path, seed: int):
     env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
     env_test.reset(seed=seed)
 
     if normalize:
         env_test = DummyVecEnv([lambda: env_test])
-        env_test = VecNormalize.load(f'models/mul_PMPT_20M_norm/envs/PPO_seed_42_env.pkl', env_test)
+        env_test = VecNormalize.load(env_path, env_test)
         env_test.training = False
         env_test.norm_reward = False
+        obs = env_test.reset()
+    else:
+        obs, _ = env_test.reset()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/mul_PMPT_20M_norm/PPO_agent_checkpoints_seed_42_2026-03-26-01-56/PPO_agent_20000000_steps.zip', env=env_test, device=device)
-    #model = SAC.load('models/sac_agent_1000000_2026-03-16-23-18.zip', env=env_test, device=device)
+    if algo == 'PPO':
+        model = PPO.load(model_path, env=env_test, device=device)
+    elif algo == 'SAC':
+        model = SAC.load(model_path, env=env_test, device=device)
 
-    obs = env_test.reset()
     done = False
 
     print(f"Début du test sur {len(df_test)} points de données...")
@@ -137,9 +140,16 @@ def test(seed: int):
 
     while not done:
         action, _ = model.predict(obs, deterministic=True)
-        obs, reward, dones, info = env_test.step(action)
 
-        total_cumulative_return *= (1 + info[0]["portfolio_return"])
+        if normalize:
+            obs, reward, dones, info = env_test.step(action)
+            info = info[0]
+            done = dones[0]
+        else:
+            obs, reward, terminated, truncated, info = env_test.step(action)
+            done = terminated or truncated
+
+        total_cumulative_return *= (1 + info["portfolio_return"])
 
         daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step_daily_return].mean()
         total_cum_return_hold *= (1 + daily_market_return)
@@ -148,14 +158,13 @@ def test(seed: int):
             "Buy_and_Hold": total_cum_return_hold - 1
         }, step)
 
-        writer.add_scalar("Performance/Daily_return", info[0]["portfolio_return"], step)
-        writer.add_scalar("Performance/Transaction_penality", info[0]["transaction_penality"], step)
-        weights_dict = {stocks[i]: float(info[0]["portfolio_weights"][i]) for i in range(len(stocks))}
+        writer.add_scalar("Performance/Daily_return", info["portfolio_return"], step)
+        writer.add_scalar("Performance/Transaction_penality", info["transaction_penality"], step)
+        weights_dict = {stocks[i]: float(info["portfolio_weights"][i]) for i in range(len(stocks))}
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
         step += 1
         step_daily_return += 1
-        done = dones[0]
 
     writer.close()
     print(f"Test terminé. Profit final: {(total_cumulative_return - 1) * 100:.2f}%")
@@ -163,10 +172,13 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
+    algo_type = "PPO"   # SAC or PPO
     if is_training:
         seed_everything(train_seed)
-        train("PPO", train_seed=train_seed)  # SAC or PPO
+        train(algo_type, train_seed=train_seed)
     else:
+        env= 'models/mul_PMPT_20M_norm/envs/PPO_seed_4_env.pkl'
+        model = 'models/mul_PMPT_20M_norm/PPO_agent_checkpoints_seed_4_2026-03-26-01-57/PPO_agent_20000000_steps.zip'
         seed_everything(test_seed)
-        test(test_seed)
+        test(algo_type, env, model, test_seed)
 

@@ -1,9 +1,7 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from scipy.optimize import minimize
 from scipy.special import softmax
-from sklearn.covariance import LedoitWolf
 
 from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax, objective_mpt_jax
 

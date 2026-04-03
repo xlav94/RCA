@@ -40,9 +40,11 @@ train_size = int(len(df) * 0.8)
 df_train = df.iloc[:train_size]
 df_test = pd.concat([df_train.tail(window_size), df.iloc[train_size:]])
 
-def make_env(df_env, stocks_env, objective_env, window_size_env, env_name_env):
+def make_env(df_env, stocks_env, objective_env, window_size_env, env_name_env, rank):
     def _init():
-        return CustomEnv(df_env, stocks_env, objective_env, window_size=window_size_env, env_name=env_name_env)
+        custom_env =  CustomEnv(df_env, stocks_env, objective_env, window_size=window_size_env, env_name=env_name_env)
+        custom_env.reset(seed=train_seed + rank)
+        return custom_env
     return _init
 
 def seed_everything(seed_init: int):
@@ -57,9 +59,11 @@ def seed_everything(seed_init: int):
         torch.backends.cudnn.benchmark = False
 
 def train(algo, train_seed=None):
-
-    vec_env = SubprocVecEnv([make_env(df_train, stocks, objective, window_size, env_name) for _ in range(num_cpu)])
-
+    env_fns = [make_env(df_train, stocks, objective, window_size, env_name, i) for i in range(num_cpu)]
+    if num_cpu > 1:
+        vec_env = SubprocVecEnv(env_fns)
+    else:
+        vec_env = DummyVecEnv(env_fns)
     vec_env = VecMonitor(vec_env)
 
     if normalize:
@@ -178,7 +182,7 @@ if __name__ == "__main__":
         train(algo_type, train_seed=train_seed)
     else:
         env = 'models/mul_PMPT_20M_norm/envs/PPO_seed_4_env.pkl'
-        model = 'models/mul_PMPT_20M/ppo_agent_20000000_2026-03-23-23-57.zip'
+        model = 'models/mul_PMPT_30M/PPO_agent_checkpoints_seed_4_2026-04-02-17-56/PPO_agent_20000000_steps.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)
 

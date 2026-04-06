@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import jax
 from sklearn.covariance import LedoitWolf
-
 jax.config.update("jax_enable_x64", True)
 from jax import jit
 from jaxopt import ProjectedGradient

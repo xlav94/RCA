@@ -4,6 +4,7 @@ import os
 import random
 import numpy as np
 import pandas as pd
+
 import torch
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -27,6 +28,7 @@ train_seed        = config.getint('MODEL', 'TRAIN_SEED')
 test_seed         = config.getint('MODEL', 'TEST_SEED')
 num_cpu           = config.getint('MODEL', 'NUM_CPU')
 checkpoint        = config.getboolean('MODEL', 'CHECKPOINT')
+use_fracdiff = config.getboolean('ENV', 'USE_FRACDIFF')
 
 # Configuration parameters for the environment
 stocks            = config.get('ENV','STOCKS').split(',')
@@ -35,14 +37,37 @@ env_name          = config.get('ENV', 'ENV_NAME')
 objective         = config.get('ENV', 'OBJECTIVE')
 normalize         = config.getboolean('ENV', 'NORMALIZE')
 
-df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28').get_env_data(feature='Open')
-train_size = int(len(df) * 0.8)
-df_train = df.iloc[:train_size]
-df_test = pd.concat([df_train.tail(window_size), df.iloc[train_size:]])
+# Configuration parameters for fracdiff
+fracdiff_d = {ticker: config.getfloat('FRACDIFF', ticker)
+              for ticker in stocks}
 
-def make_env(df_env, stocks_env, objective_env, window_size_env, env_name_env, rank):
+pipeline = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28')
+df       = pipeline.get_env_data(feature='Open')
+
+if use_fracdiff:
+    df_features = pipeline.get_features_data(d=fracdiff_d, fracdiff_window=50)
+    common_idx  = df.index.intersection(df_features.index)
+    df          = df.loc[common_idx]
+    df_features = df_features.loc[common_idx]
+else:
+    df_features = None
+
+train_size    = int(len(df) * 0.8)
+df_train      = df.iloc[:train_size]
+df_test       = pd.concat([df_train.tail(window_size), df.iloc[train_size:]])
+
+if use_fracdiff:
+    df_feat_train = df_features.iloc[:train_size]
+    df_feat_test  = pd.concat([df_features.iloc[:train_size].tail(window_size),
+                                df_features.iloc[train_size:]])
+else:
+    df_feat_train = None
+    df_feat_test  = None
+
+
+def make_env(df_env, df_feat_env, stocks_env, objective_env, window_size_env, env_name_env, rank):
     def _init():
-        custom_env =  CustomEnv(df_env, stocks_env, objective_env, window_size=window_size_env, env_name=env_name_env)
+        custom_env =  CustomEnv(df_env, stocks_env, objective_env, window_size=window_size_env, env_name=env_name_env, df_features=df_feat_env)
         custom_env.reset(seed=train_seed + rank)
         return custom_env
     return _init
@@ -59,7 +84,7 @@ def seed_everything(seed_init: int):
         torch.backends.cudnn.benchmark = False
 
 def train(algo, train_seed=None):
-    env_fns = [make_env(df_train, stocks, objective, window_size, env_name, i) for i in range(num_cpu)]
+    env_fns = [make_env(df_train, df_feat_train, stocks, objective, window_size, env_name, i) for i in range(num_cpu)]
     if num_cpu > 1:
         vec_env = SubprocVecEnv(env_fns)
     else:
@@ -112,7 +137,7 @@ def train(algo, train_seed=None):
 
 
 def test(algo, model_path, env_path, seed: int):
-    env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
+    env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test", df_features=df_feat_test)
     env_test.reset(seed=seed)
 
     if normalize:
@@ -185,4 +210,3 @@ if __name__ == "__main__":
         model = 'models/mul_PMPT_30M/PPO_agent_checkpoints_seed_4_2026-04-02-17-56/PPO_agent_20000000_steps.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)
-

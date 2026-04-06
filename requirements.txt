@@ -10,7 +10,7 @@ tqdm
 rich
 seaborn
 matplotlib
-
+statsmodels
 # "jax[cuda12]" when using GPU else "jax" when using CPU
 jax
 jaxopt

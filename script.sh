@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:1
-#SBATCH --time=20:00:00
+#SBATCH --time=15:00:00
 #SBATCH --output=/home/cedric/scratch/logs/slurm-%j-%x.out
 #SBATCH --error=/home/cedric/scratch/logs/slurm-%j-%x.error
 
@@ -19,6 +19,12 @@ cd "$SLURM_TMPDIR/RCA"
 echo "Contenu du dossier actuel ($(pwd)) :"
 ls -F  # Ceci affichera la liste des fichiers pour confirmer la présence de main.py
 
+# When using jax[cuda12]
+# export XLA_PYTHON_CLIENT_PREALLOCATE=false
+# module load StdEnv/2023
+# module load cudacore/.12.9.1
+# module load cudnn
+
 echo -e "\nSetting up Python environment..."
 module load python/3.13
 export PYTHONUNBUFFERED=1
@@ -31,7 +37,7 @@ source venv/bin/activate
 python -m pip install --upgrade pip
 # On vérifie si le fichier existe avant d'installer
 if [ -f "requirement.txt" ]; then
-    python -m pip install -r requirement.txt
+    python -m pip install -r requirements.txt
 else
     echo "ERREUR : requirement.txt introuvable dans $(pwd)"
     exit 1

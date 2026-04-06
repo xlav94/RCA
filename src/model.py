@@ -1,5 +1,4 @@
 import configparser
-import math
 from datetime import datetime
 from typing import Callable
 
@@ -103,7 +102,7 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
 
     return func
 
-def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True):
+def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, use_cnn=False, batch_first=True, seed=None):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device : {device}")
@@ -119,14 +118,15 @@ def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
     )
 
     model = PPO("MultiInputPolicy", env,
-                learning_rate=linear_schedule(config.getfloat('PPO', 'LEARNING_RATE')),
+                learning_rate=config.getfloat('PPO', 'LEARNING_RATE'),
                 n_steps=config.getint('PPO', 'N_STEPS'),
                 batch_size=config.getint('PPO', 'BATCH_SIZE'),
                 n_epochs=config.getint('PPO', 'N_EPOCHS'),
                 policy_kwargs=policy_kwargs,
                 verbose=1,
-                tensorboard_log=f"./tensorboard_logs/PPO_{datetime.now().strftime('%Y-%m-%d-%H:%M')}",
-                device=device
+                tensorboard_log=f"./tensorboard_logs/PPO_{datetime.now().strftime('%Y-%m-%d-%H-%M')}",
+                device=device,
+                seed=seed
                 )
     return model
 
@@ -152,7 +152,7 @@ def get_agent_sac(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
                 gradient_steps=config.getint('SAC', 'GRADIENT_STEPS'),
                 policy_kwargs=policy_kwargs,
                 verbose=1,
-                tensorboard_log=f"./tensorboard_logs/SAC_{datetime.now().strftime('%Y-%m-%d-%H:%M')}",
+                tensorboard_log=f"./tensorboard_logs/SAC_{datetime.now().strftime('%Y-%m-%d-%H-%M')}",
                 device=device
                 )
     return model

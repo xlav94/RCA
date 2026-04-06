@@ -1,5 +1,6 @@
 \documentclass[final]{article}
 \usepackage{svg}
+\usepackage{float}
 
 % if you need to pass options to natbib, use, e.g.:
 %     \PassOptionsToPackage{numbers, compress}{natbib}
@@ -8,7 +9,7 @@
 % The authors should use one of these tracks.
 % Before accepting by the NeurIPS conference, select one of the options below.
 % 0. "default" for submission
- \usepackage{neurips_2025}
+ \usepackage[preprint]{neurips_2025}
 % the "default" option is equal to the "main" option, which is used for the Main Track with double-blind reviewing.
 % 1. "main" option is used for the Main Track
 %  \usepackage[main]{neurips_2025}
@@ -74,14 +75,17 @@
 
 \author{
     Cédric Guévremont \\
+    Université de Montréal \\
     Matricule : 20266532 \\
     \texttt{cedric.guevremont@umontreal.ca}
     \And
     Rima Boujenane \\
+    Université de Montréal \\
      Matricule : 20235550 \\
     \texttt{rima.boujenane@umontreal.ca}
     \And
     Abdelghafour Rahmouni \\
+    Université de Montréal \\
     Matricule : 20246224 \\
     \texttt{abdel.ghafour.rahmouni@umontreal.ca}
 }
@@ -151,13 +155,33 @@ Recent work incorporates alternative data streams to enrich state representation
 
 To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
 
+\newpage
+
 \section{Developed Methods and Experimental Plan}
 
 This section details the methodology for our dynamic portfolio management system, formulating asset allocation as a sequential decision-making process solved by a Proximal Policy Optimization (PPO) agent. We outline the custom environment, the multimodal Actor-Critic architecture, the risk-aware reward shaping, and the training procedure, concluding with preliminary baseline comparisons and future directions.
 
 \subsection{Environment and Data Pipeline}
 
-The portfolio management problem is formulated as a sequential decision-making task within a custom environment compatible with the \texttt{Gymnasium} interface. The environment simulates the evolution of a portfolio composed of 11 highly capitalized financial assets (MSFT, GOOG, AMZN, BRK-B, WMT, COST, JPM, V, LLY, PG, GLD).
+The portfolio management problem is formulated as a sequential decision-making task within a custom environment compatible with the \texttt{Gymnasium} interface. The environment simulates the evolution of a portfolio composed of 21 highly capitalized financial assets:
+\begin{table}[h!]
+    \centering
+    \caption{Portfolio assets by sector.}
+    \label{tab:portfolio_assets}
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{Assets} & \textbf{Sector} \\
+        \midrule
+        MSFT, GOOG, AMZN, AAPL & Technology \\
+        BRK-B, JPM, V & Financials \\
+        WMT, COST, PG & Consumer Staples \\
+        LLY, UNH & Healthcare \\
+        GLD, DBC & Commodities \\
+        UNP, CAT, LIN, NEE, AMT & Industrials \\
+        XOM, CVX & Energy \\
+        \bottomrule
+    \end{tabular}
+\end{table}
 
 Historical market data covering the period from January 2010 to February 2026 are retrieved via the Yahoo Finance API and processed through a dedicated data pipeline. To ensure chronological integrity and prevent data leakage, the data undergoes a strict time-series split.
 
@@ -174,7 +198,46 @@ To process the structured multimodal observation space, we implement a custom fe
 \item a \textbf{Multi-Layer Perceptron (MLP)} with a ReLU activation function that processes the static current portfolio allocation state.
 \end{itemize}
 
-The final hidden state of the LSTM is concatenated with the MLP output to produce a combined feature representation. This holistic state vector is then fed into the PPO agent's Actor-Critic architecture. The policy network (Actor) determines the optimal allocation, passing its output through a \textbf{Softmax} layer to ensure the resulting actions represent valid portfolio weights.
+The final hidden state of the LSTM is concatenated with the MLP output to produce a combined feature representation.
+This holistic state vector is then fed into the PPO agent's Actor-Critic architecture. \\
+The actions of the Actor correspond to $\mu$ (expected returns vector). These actions are then passed
+through an objective optimization layer, either a Mean-Variance optimization or a Mean-Semi-deviation optimization subject
+to the following constraints:
+
+\begin{equation}
+    \left\{ w \in \mathbb{R}^n : \sum_{i=1}^n w_i = 1, \quad L \leq w_i \leq U, \quad \forall i \in \{1, \dots, n\} \right\}
+\end{equation}
+
+
+\subsubsection*{Mean-variance Optimization (MPT)}
+\begin{equation}
+    \begin{aligned}
+        \max_{w} \quad & w \mu - \frac{1}{2} \lambda (w^T \Sigma w) \\
+    \end{aligned}
+\end{equation}
+
+\subsubsection*{Mean Semi-deviation Optimization (PMPT)}
+\begin{equation}
+    \begin{aligned}
+        \max_{w} \quad & w \mu - \lambda \sqrt{\frac{1}{N} \sum_{t=1}^{N} \min(0, r_t w)^2 + \epsilon} \\
+    \end{aligned}
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item $w \in \mathbb{R}^n$ is the \textbf{portfolio weights vector}, representing the proportion of capital allocated to each of the $n$ assets.
+    \item $\mu \in \mathbb{R}^n$ is the \textbf{expected returns vector} (output by the PPO Actor).
+    \item $\Sigma \in \mathbb{R}^{n \times n}$ is the \textbf{covariance matrix} of asset returns, representing total risk.
+    \item $r_t \in \mathbb{R}^n$ denotes the \textbf{realized return vector} at time $t$ within a look-back window of size $N$.
+    \item $\lambda > 0$ is the \textbf{risk aversion coefficient}, which scales the penalty for volatility or downside risk.
+    \item $L, U$ are the \textbf{lower and upper bounds} for individual asset weights (e.g., $L=0, U=0.1$).
+    \item $\epsilon$ is a \textbf{numerical stability constant} ($10^{-5}$) used to ensure the differentiability of the square root in the PMPT objective.
+\end{itemize}
+
+%Jacobian for Mean Semi-deviation Utility:
+%$-\left[ \mu - \lambda \frac{ \sum_{t=1}^{N} \min(0, r_t w) r_t}{N DR(w)} \right]$ \\
+%\textit{Using the Jacobian for the optimization is 27\% faster than without it during the training process.}
+%$DR(w)$ = Downside Risk (Mean Semi-deviation) of the portfolio with weights $w$\\
 
 \begin{figure}[h!]
     \centering
@@ -203,7 +266,7 @@ The final hidden state of the LSTM is concatenated with the MLP output to produc
 
     % --- 4. AGENT (ACTOR) & SOFTMAX ---
     \node[head, right=2cm of concat] (actor) {Actor};
-    \node[layer, right=0.8cm of actor, fill=yellow!15] (softmax) {Softmax};
+    \node[layer, right=0.8cm of actor, fill=yellow!15] (softmax) {Objective Optimization};
 
     % --- 5. CRITIC & REWARD (Placés en dessous pour sauver de l'espace à droite) ---
     \node[env, right=1.5cm of softmax] (reward) {Reward Function};
@@ -226,7 +289,7 @@ The final hidden state of the LSTM is concatenated with the MLP output to produc
 
     % Flux d'exécution
     \draw[arrow] (actor) -- (softmax);
-    \draw[arrow] (softmax) -- node[pos=0.5, above, font=\tiny] {Actions} (reward);
+    \draw[arrow] (softmax) -- node[pos=0.5, above, font=\tiny] {Weights} (reward);
 
     % Boucle temporelle (Next state)
     \draw[arrow, dashed] (softmax.south) -- ++(0,-0.8) -| node[pos=0.25, above, font=\tiny] {} (in_port.south);
@@ -279,6 +342,7 @@ Preliminary results indicate that the agent progressively learns non-trivial all
     \end{minipage}\label{fig:figure}
 \end{figure}
 
+
 \subsection{Future Directions}
 
 Moving forward, we plan to enhance the system's performance and robustness through three primary avenues. First, we intend to explore \textbf{alternative Deep Reinforcement Learning (DRL) algorithms} to compare their stability and convergence against our current PPO baseline. Second, we will focus on \textbf{feature engineering}, incorporating stationary technical indicators and risk-adjusted metrics into the observation space to provide the agent with richer market context. Finally, we will conduct systematic \textbf{hyperparameter tuning} of the model architecture and training process to optimize for long-term Sharpe ratios and more effective risk management.
@@ -303,19 +367,30 @@ acts as an implicit regularizer: it reduces the variance of the learned policy a
 cost of some upside capture, and may be preferable in risk-sensitive deployment
 settings where consistency matters more than peak return.
 
-\begin{figure}[h!]
-    \centering
-    \includegraphics[width=0.95\linewidth]{../src/plots/20260327-190807/raw_vs_normalized_mean_cumulative_return.png}
-    \caption{Mean cumulative return across seeds: raw vs.\ normalized environment,
-             compared against the equally-weighted buy-and-hold benchmark.}
-    \label{fig:cumret_new}
-\end{figure}
+
+%\begin{figure}[h!]
+%    \centering
+%    \includegraphics[width=0.95\linewidth]{../src/plots/20260327-190807/raw_vs_normalized_mean_cumulative_return.png}
+%    \caption{Mean cumulative return across seeds: raw vs.\ normalized environment,
+%             compared against the equally-weighted buy-and-hold benchmark.}
+%    \label{fig:cumret_new}
+%\end{figure}
 
 \subsection{Conclusion}
 The results presented here demonstrate that coupling a PPO agent with a Post-Modern Portfolio Theory optimization objective offers a valuable allocation policy.
 Training is still ongoing, and the next steps will include evaluation across multiple seeds, extending timesteps, and broader ablation studies. Each of these directions not only represents a path to a stronger performance, but also a cleaner understanding of the design choices that truly drive the gains observed so far.
 
+
+returns of multiple PMPT 20M \
+101.54% 116.20% 64.49, 82.50, 90.24%
+mean = 90.6 \
+
+returns of multiple PMPT 30M \
+79.79%, 86.49%, 55.41%, 71.31%, 75.21%
+
 \newpage
+
+
 \bibliographystyle{plainnat}
 \bibliography{references}
 \end{document}

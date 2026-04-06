@@ -96,10 +96,23 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
 config = configparser.ConfigParser()
 config.read('config.ini')
+initial_lr = config.getfloat('PPO', 'LEARNING_RATE')
 
 def linear_schedule(initial_value: float) -> Callable[[float], float]:
     def func(progress_remaining: float) -> float:
         return progress_remaining * initial_value
+
+    return func
+
+def delayed_linear_schedule(initial_value: float, min_value: float, decay_start: float = 0.5):
+    def func(progress_remaining: float) -> float:
+        progress_done = 1.0 - progress_remaining
+
+        if progress_done < decay_start:
+            return initial_value
+
+        decay_progress = (progress_done - decay_start) / (1.0 - decay_start)
+        return initial_value - decay_progress * (initial_value - min_value)
 
     return func
 
@@ -119,7 +132,11 @@ def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
     )
 
     model = PPO("MultiInputPolicy", env,
-                learning_rate=linear_schedule(config.getfloat('PPO', 'LEARNING_RATE')),
+                learning_rate=delayed_linear_schedule(
+                    initial_value=initial_lr,
+                    min_value=0,
+                    decay_start=0.6,
+                ),
                 n_steps=config.getint('PPO', 'N_STEPS'),
                 batch_size=config.getint('PPO', 'BATCH_SIZE'),
                 n_epochs=config.getint('PPO', 'N_EPOCHS'),

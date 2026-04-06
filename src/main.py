@@ -201,13 +201,6 @@ def test(algo, model_path, env_path, seed: int):
 
 
 if __name__ == "__main__":
-    from src.feature_engineering import plot_fracdiff_diagnostic
-    from src.data import DataDownloader
-
-    raw_df = DataDownloader(stocks, '2010-01-01', '2026-02-28').fetch_data()
-    for ticker in ['AAPL', 'GLD', 'MSFT']:
-        plot_fracdiff_diagnostic(raw_df, ticker)
-
     algo_type = "PPO"   # SAC or PPO
     if is_training:
         seed_everything(train_seed)
@@ -217,4 +210,3 @@ if __name__ == "__main__":
         model = 'models/mul_PMPT_30M/PPO_agent_checkpoints_seed_4_2026-04-02-17-56/PPO_agent_20000000_steps.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)
-

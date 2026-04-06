@@ -4,11 +4,12 @@ import unittest
 import jax.numpy as jnp
 import pandas as pd
 from scipy.optimize import check_grad, minimize
+from sklearn.covariance import LedoitWolf
 
 from src.env import CustomEnv
 import numpy as np
 
-from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax
+from src.portfolio_optimizer import PortfolioOptimizer, objective_pmpt_jax, objective_mpt_jax
 
 
 class TestCustomEnv(unittest.TestCase):
@@ -289,3 +290,103 @@ class TestCustomEnv(unittest.TestCase):
             returns
         )
         print(f"Mean time for JAX : {(time.time() - start) / 10:.4f}s")
+
+    def test_mpt_optimization_parity(self):
+        np.random.seed(42)
+        num_assets = 21
+        window_size = 60
+        # Génération de données aléatoires pour les rendements
+        data = np.random.normal(0.0005, 0.01, (window_size, num_assets))
+        stocks = [f"STK_{i}" for i in range(num_assets)]
+        returns_df = pd.DataFrame(data, columns=stocks)
+
+        # Vecteur de rendements espérés (mu)
+        mu = np.random.normal(0.01, 0.02, num_assets)
+
+        low_b, up_b = 0.0, 0.10
+        initial_weights = np.full(num_assets, 1 / num_assets)
+        lambda_reg = 2.0  # Paramètre d'aversion au risque
+
+        ######### SCIPY (Référence) ##########
+        # 1. Calcul de la covariance avec Ledoit-Wolf
+        lw = LedoitWolf().fit(returns_df)
+        cov_matrix = lw.covariance_
+
+        # 2. Définition de l'objectif MPT pour SciPy
+        def objective_MPT_scipy(weights, l=lambda_reg):
+            port_return = np.dot(weights, mu)
+            port_risk = 0.5 * l * np.dot(weights.T, np.dot(cov_matrix, weights))
+            return -(port_return - port_risk)
+
+        # 3. Définition du Jacobien (Gradient) pour accélérer SciPy
+        def jacobian_MPT_scipy(weights, l=lambda_reg):
+            # Grad de (w.mu - 0.5 * l * w.cov.w) = mu - l * cov.w
+            return -(mu - l * np.dot(cov_matrix, weights))
+
+        cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
+        bnds = tuple((low_b, up_b) for _ in range(num_assets))
+
+        res_scipy = minimize(
+            objective_MPT_scipy,
+            initial_weights,
+            method='SLSQP',
+            bounds=bnds,
+            constraints=cons,
+            jac=jacobian_MPT_scipy,
+            options={'ftol': 1e-9, 'maxiter': 100}
+        )
+        weights_scipy = res_scipy.x
+
+        ########## JAX (Ta classe) ##########
+        po = PortfolioOptimizer(lower_bound=low_b, upper_bound=up_b)
+
+        # On passe la fonction objective JAX que nous avons définie précédemment
+        weights_jax = po.minimize(
+            objective_mpt_jax,
+            initial_weights,
+            mu,
+            returns_df
+        )
+
+        # Analyse des résultats
+        sum_scipy = np.sum(weights_scipy)
+        sum_jax = np.sum(weights_jax)
+        distance = np.linalg.norm(weights_scipy - weights_jax)
+
+        print("\n" + "=" * 40)
+        print("MPT: SCIPY vs JAX (Ledoit-Wolf)")
+        print("=" * 40)
+        print(f"Sum of weights SciPy : {sum_scipy:.6f}")
+        print(f"Sum of weights JAX   : {sum_jax:.6f}")
+        print(f"L2 norm distance     : {distance:.2e}")
+        print("-" * 40)
+
+        # Vérification des contraintes
+        assert np.isclose(sum_jax, 1.0, atol=1e-3), f"JAX sum weights failed: {sum_jax}"
+
+        if distance < 1e-2:
+            print("Résultats identiques (Convergence OK)")
+        else:
+            print("Différence détectée (Vérifiez les paramètres de tolérance)")
+
+        # --- Benchmark de performance ---
+
+        # Timing SciPy
+        start_scipy = time.time()
+        for _ in range(10):
+            _ = minimize(objective_MPT_scipy, initial_weights, method='SLSQP',
+                         bounds=bnds, constraints=cons, jac=jacobian_MPT_scipy)
+        mean_scipy = (time.time() - start_scipy) / 10
+        print(f"Mean time SciPy : {mean_scipy:.4f}s")
+
+        # Warm-up JAX (Compilation)
+        _ = po.minimize(objective_mpt_jax, initial_weights, mu, returns_df)
+
+        # Timing JAX
+        start_jax = time.time()
+        for _ in range(10):
+            _ = po.minimize(objective_mpt_jax, initial_weights, mu, returns_df)
+        mean_jax = (time.time() - start_jax) / 10
+        print(f"Mean time JAX   : {mean_jax:.4f}s")
+
+        print(f"Speedup JAX     : {mean_scipy / mean_jax:.1f}x")

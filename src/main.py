@@ -28,6 +28,7 @@ train_seed        = config.getint('MODEL', 'TRAIN_SEED')
 test_seed         = config.getint('MODEL', 'TEST_SEED')
 num_cpu           = config.getint('MODEL', 'NUM_CPU')
 checkpoint        = config.getboolean('MODEL', 'CHECKPOINT')
+use_fracdiff = config.getboolean('ENV', 'USE_FRACDIFF')
 
 # Configuration parameters for the environment
 stocks            = config.get('ENV','STOCKS').split(',')
@@ -36,14 +37,39 @@ env_name          = config.get('ENV', 'ENV_NAME')
 objective         = config.get('ENV', 'OBJECTIVE')
 normalize         = config.getboolean('ENV', 'NORMALIZE')
 
-df = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28').get_env_data(feature='Open')
-train_size = int(len(df) * 0.8)
-df_train = df.iloc[:train_size]
-df_test = pd.concat([df_train.tail(window_size), df.iloc[train_size:]])
+# Configuration parameters for fracdiff
+fracdiff_d = {ticker: config.getfloat('FRACDIFF', ticker)
+              for ticker in stocks}
 
-def make_env(df_env, stocks_env, objective_env, window_size_env, env_name_env):
+pipeline = DataPipeline(tickers=stocks, start_date='2010-01-01', end_date='2026-02-28')
+df       = pipeline.get_env_data(feature='Open')
+
+if use_fracdiff:
+    df_features = pipeline.get_features_data(d=fracdiff_d, fracdiff_window=50)
+    common_idx  = df.index.intersection(df_features.index)
+    df          = df.loc[common_idx]
+    df_features = df_features.loc[common_idx]
+else:
+    df_features = None
+
+train_size    = int(len(df) * 0.8)
+df_train      = df.iloc[:train_size]
+df_test       = pd.concat([df_train.tail(window_size), df.iloc[train_size:]])
+
+if use_fracdiff:
+    df_feat_train = df_features.iloc[:train_size]
+    df_feat_test  = pd.concat([df_features.iloc[:train_size].tail(window_size),
+                                df_features.iloc[train_size:]])
+else:
+    df_feat_train = None
+    df_feat_test  = None
+
+
+def make_env(df_env, df_feat_env, stocks_env, objective_env, window_size_env, env_name_env, rank):
     def _init():
-        return CustomEnv(df_env, stocks_env, objective_env, window_size=window_size_env, env_name=env_name_env)
+        custom_env =  CustomEnv(df_env, stocks_env, objective_env, window_size=window_size_env, env_name=env_name_env, df_features=df_feat_env)
+        custom_env.reset(seed=train_seed + rank)
+        return custom_env
     return _init
 
 def seed_everything(seed_init: int):
@@ -58,9 +84,11 @@ def seed_everything(seed_init: int):
         torch.backends.cudnn.benchmark = False
 
 def train(algo, train_seed=None):
-
-    vec_env = SubprocVecEnv([make_env(df_train, stocks, objective, window_size, env_name) for _ in range(num_cpu)])
-
+    env_fns = [make_env(df_train, df_feat_train, stocks, objective, window_size, env_name, i) for i in range(num_cpu)]
+    if num_cpu > 1:
+        vec_env = SubprocVecEnv(env_fns)
+    else:
+        vec_env = DummyVecEnv(env_fns)
     vec_env = VecMonitor(vec_env)
 
     if normalize:
@@ -108,21 +136,25 @@ def train(algo, train_seed=None):
         vec_env.save(f'models/envs/{algo}_seed_{train_seed}_env.pkl')
 
 
-def test(seed: int):
-    env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test")
+def test(algo, model_path, env_path, seed: int):
+    env_test = CustomEnv(df_test, stocks, objective, window_size=window_size, env_name=f"{env_name}_test", df_features=df_feat_test)
     env_test.reset(seed=seed)
 
     if normalize:
         env_test = DummyVecEnv([lambda: env_test])
-        env_test = VecNormalize.load(f'models/mul_PMPT_20M_norm/envs/PPO_seed_42_env.pkl', env_test)
+        env_test = VecNormalize.load(env_path, env_test)
         env_test.training = False
         env_test.norm_reward = False
+        obs = env_test.reset()
+    else:
+        obs, _ = env_test.reset()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = PPO.load('models/PPO_30M_delayed_linear_75/ppo_agent_30000000_seed_199_2026-04-06-05-54.zip', env=env_test, device=device)
-    #model = SAC.load('models/sac_agent_1000000_2026-03-16-23-18.zip', env=env_test, device=device)
+    if algo == 'PPO':
+        model = PPO.load(model_path, env=env_test, device=device)
+    elif algo == 'SAC':
+        model = SAC.load(model_path, env=env_test, device=device)
 
-    obs, _ = env_test.reset()
     done = False
 
     print(f"Début du test sur {len(df_test)} points de données...")
@@ -131,13 +163,20 @@ def test(seed: int):
         df_benchmark[f'{stock}_ret'] = df_benchmark[f'Open_{stock}'].pct_change().fillna(0)
     total_cumulative_return = 1.0
     total_cum_return_hold = 1.0
-    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_seed_{seed}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}")
+    writer =    SummaryWriter(log_dir=f"./tensorboard_logs/test_results_{datetime.now().strftime('%Y-%m-%d-%H-%M')}")
     step = 0
     step_daily_return = window_size
 
     while not done:
         action, _ = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = env_test.step(action)
+
+        if normalize:
+            obs, reward, dones, info = env_test.step(action)
+            info = info[0]
+            done = dones[0]
+        else:
+            obs, reward, terminated, truncated, info = env_test.step(action)
+            done = terminated or truncated
 
         total_cumulative_return *= (1 + info["portfolio_return"])
 
@@ -155,7 +194,6 @@ def test(seed: int):
 
         step += 1
         step_daily_return += 1
-        done = terminated or truncated
 
     writer.close()
     print(f"Test terminé. Profit final: {(total_cumulative_return - 1) * 100:.2f}%")
@@ -163,10 +201,12 @@ def test(seed: int):
 
 
 if __name__ == "__main__":
+    algo_type = "PPO"   # SAC or PPO
     if is_training:
         seed_everything(train_seed)
-        train("PPO", train_seed=train_seed)  # SAC or PPO
+        train(algo_type, train_seed=train_seed)
     else:
+        env = 'models/mul_PMPT_20M_norm/envs/PPO_seed_4_env.pkl'
+        model = 'models/mul_PMPT_30M/PPO_agent_checkpoints_seed_4_2026-04-02-17-56/PPO_agent_20000000_steps.zip'
         seed_everything(test_seed)
-        test(test_seed)
-
+        test(algo_type, model, env, test_seed)

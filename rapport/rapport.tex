@@ -1,5 +1,6 @@
 \documentclass[final]{article}
 \usepackage{svg}
+\usepackage{float}
 
 % if you need to pass options to natbib, use, e.g.:
 %     \PassOptionsToPackage{numbers, compress}{natbib}
@@ -153,6 +154,8 @@ Recent work incorporates alternative data streams to enrich state representation
 \subsection{Risk-Aware Rewards and Responsible Management}
 
 To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
+
+\newpage
 
 \section{Developed Methods and Experimental Plan}
 
@@ -339,6 +342,7 @@ Preliminary results indicate that the agent progressively learns non-trivial all
     \end{minipage}\label{fig:figure}
 \end{figure}
 
+
 \subsection{Future Directions}
 
 Moving forward, we plan to enhance the system's performance and robustness through three primary avenues. First, we intend to explore \textbf{alternative Deep Reinforcement Learning (DRL) algorithms} to compare their stability and convergence against our current PPO baseline. Second, we will focus on \textbf{feature engineering}, incorporating stationary technical indicators and risk-adjusted metrics into the observation space to provide the agent with richer market context. Finally, we will conduct systematic \textbf{hyperparameter tuning} of the model architecture and training process to optimize for long-term Sharpe ratios and more effective risk management.
@@ -385,6 +389,8 @@ returns of multiple PMPT 30M \
 79.79%, 86.49%, 55.41%, 71.31%, 75.21%
 
 \newpage
+
+
 \bibliographystyle{plainnat}
 \bibliography{references}
 \end{document}

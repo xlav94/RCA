@@ -103,7 +103,7 @@ def train(algo, train_seed=None):
     if checkpoint:
         checkpoint_dir = f"models/{algo}_agent_checkpoints_seed_{train_seed}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}/"
         checkpoint_callback = CheckpointCallback(
-            save_freq=max(1, 5_000_000 // num_cpu),
+            save_freq=max(1, 10_000_000 // num_cpu),
             save_path=checkpoint_dir,
             name_prefix=f"{algo}_agent",
             save_replay_buffer=True,

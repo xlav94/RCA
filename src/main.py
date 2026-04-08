@@ -96,8 +96,8 @@ def train(algo, train_seed=None):
             vec_env,
             training=True,
             norm_obs=True,
-            norm_reward=True,
-            clip_reward=10.0,
+            norm_reward=False,
+            clip_reward=100,
         )
 
     if checkpoint:
@@ -206,7 +206,7 @@ if __name__ == "__main__":
         seed_everything(train_seed)
         train(algo_type, train_seed=train_seed)
     else:
-        env = 'models/mul_PMPT_20M_norm/envs/PPO_seed_4_env.pkl'
-        model = 'models/mul_PMPT_30M/PPO_agent_checkpoints_seed_4_2026-04-02-17-56/PPO_agent_20000000_steps.zip'
+        env = 'models/mul_30M_norm/envs/PPO_seed_13_2_env.pkl'
+        model = 'models/mul_30M_norm/PPO_agent_checkpoints_seed_13_2_2026-04-07-17-32/PPO_agent_30000000_steps.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)

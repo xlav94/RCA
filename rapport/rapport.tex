@@ -254,7 +254,8 @@ Where:
 
     % --- 1. INPUTS ---
     \node[input] (in_hist) {Price History};
-    \node[input, below=0.6cm of in_hist] (in_port) {Portfolio Weights};
+    \node[input, below=0.5cm of in_hist] (in_fracdiff) {Fractional Differentiation};
+    \node[input, below=1.2cm of in_fracdiff] (in_port) {Portfolio Weights};
 
     % --- 2. FEATURES EXTRACTOR ---
     \node[layer, right=of in_hist] (lstm) {LSTM};
@@ -262,7 +263,7 @@ Where:
 
     % --- 3. CONCATENATION ---
     \node[merge, right=1cm of $(lstm.east)!0.5!(mlp.east)$] (concat) {$\oplus$};
-    \node[above=0.05cm of concat, font=\sffamily\tiny\bfseries] {Features Vector};
+    \node[above=0.5cm of concat, font=\sffamily\tiny\bfseries] {Features Vector};
 
     % --- 4. AGENT (ACTOR) & SOFTMAX ---
     \node[head, right=2cm of concat] (actor) {Actor};
@@ -278,6 +279,8 @@ Where:
 
     % --- CONNEXIONS ---
     \draw[arrow] (in_hist) -- (lstm);
+    \draw[arrow] (in_hist) -- (in_fracdiff);
+    \draw[arrow] (in_fracdiff) -- (lstm);
     \draw[arrow] (in_port) -- (mlp);
 
     \draw[arrow] (lstm.east) -- (concat.west);
@@ -292,7 +295,7 @@ Where:
     \draw[arrow] (softmax) -- node[pos=0.5, above, font=\tiny] {Weights} (reward);
 
     % Boucle temporelle (Next state)
-    \draw[arrow, dashed] (softmax.south) -- ++(0,-0.8) -| node[pos=0.25, above, font=\tiny] {} (in_port.south);
+    \draw[arrow, dashed] (softmax.south) -- ++(0,-0.2) -| node[pos=0.25, above, font=\tiny] {} (in_port.north);
 
     \draw[arrow] (reward.south) |- (critic.east);
     \draw[arrow] (critic.north) -- node[pos=0.5, right, font=\tiny] {Values} (actor.south);
@@ -386,7 +389,18 @@ returns of multiple PMPT 20M \
 mean = 90.6 \
 
 returns of multiple PMPT 30M \
-79.79%, 86.49%, 55.41%, 71.31%, 75.21%
+73.37, 88.06, 51.20, 79.03, 87.02
+
+
+new result :
+30M
+72.72, 53.68, 85.65, 91.41, mean = 75.87, std = 14.5
+20M
+73.57, 68.50, 85.41, 63.44, mean = 72.73, std = 8.1
+10M
+82.53, 91.17, 77.20, 80.68, mean = 82.9, std = 5.1
+
+buy and hold = 80.68
 
 \newpage
 

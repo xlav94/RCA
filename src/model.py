@@ -2,6 +2,7 @@ import configparser
 from datetime import datetime
 from typing import Callable
 
+import numpy as np
 import torch
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -75,6 +76,8 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
         # Update the features dimension to reflect the combined output of the LSTM and MLP
         self._features_dim = hidden_size_lstm + portfolio_state_shape
+        
+        self._init_weights()
 
     def forward(self, observations) -> torch.Tensor:
         if "market_history" not in observations:
@@ -91,6 +94,21 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         out_portfolio_state = self.relu(self.mlp_portfolio(observations['portfolio_state']))  # shape(
         combined_features = torch.cat((h_c[-1], out_portfolio_state), dim=1)
         return combined_features
+
+    def _init_weights(self):
+        for name, param in self.lstm.named_parameters():
+            if 'weight_ih' in name:
+                torch.nn.init.orthogonal_(param.data)
+            elif 'weight_hh' in name:
+                torch.nn.init.orthogonal_(param.data)
+            elif 'bias' in name:
+                param.data.fill_(0)
+                n = param.size(0)
+                param.data[n // 4:n // 2].fill_(1.0)
+
+        torch.nn.init.orthogonal_(self.mlp_portfolio.weight.data, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.mlp_portfolio.bias.data, 0.0)
+
 
 
 config = configparser.ConfigParser()
@@ -126,7 +144,9 @@ def get_agent_ppo(env, hidden_size_lstm=168, num_layers_lstm=2, dropout_lstm=0, 
                 verbose=1,
                 tensorboard_log=f"./tensorboard_logs/PPO_{datetime.now().strftime('%Y-%m-%d-%H-%M')}",
                 device=device,
-                seed=seed
+                seed=seed,
+                ent_coef=config.getfloat('PPO', 'ENT_COEF'),
+                clip_range=config.getfloat('PPO', 'CLIP_RANGE'),
                 )
     return model
 

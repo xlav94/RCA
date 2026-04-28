@@ -75,6 +75,7 @@ def make_env(df_env, df_feat_env, stocks_env, objective_env, window_size_env, en
 def seed_everything(seed_init: int):
     random.seed(seed_init)
     os.environ['PYTHONHASHSEED'] = str(seed_init)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     np.random.seed(seed_init)
     torch.manual_seed(seed_init)
     if torch.cuda.is_available():
@@ -82,6 +83,8 @@ def seed_everything(seed_init: int):
         torch.cuda.manual_seed_all(seed_init)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.enabled = False
+    torch.use_deterministic_algorithms(True)
 
 def train(algo, train_seed=None):
     env_fns = [make_env(df_train, df_feat_train, stocks, objective, window_size, env_name, i) for i in range(num_cpu)]
@@ -96,8 +99,8 @@ def train(algo, train_seed=None):
             vec_env,
             training=True,
             norm_obs=True,
-            norm_reward=False,
-            clip_reward=100,
+            norm_reward=True,
+            clip_reward=20,
         )
 
     if checkpoint:
@@ -206,7 +209,7 @@ if __name__ == "__main__":
         seed_everything(train_seed)
         train(algo_type, train_seed=train_seed)
     else:
-        env = 'models/mul_30M/envs/PPO_seed_13_env.pkl'
-        model = 'models/mul_30M/PPO_agent_checkpoints_seed_13_2026-04-08-15-33/PPO_agent_10000000_steps.zip'
+        env = 'models/mul_30M/envs/PPO_seed_42_env.pkl'
+        model = 'models/mul_30M/PPO_agent_checkpoints_seed_2300_2026-04-08-15-33/PPO_agent_10000000_steps.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)

@@ -90,7 +90,7 @@ class CustomEnv(gym.Env):
 
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.pct_change().dropna()
-            mu = action
+            mu = action * 0.01
             num_assets = self.num_assets
             initial_weights = np.full(num_assets, 1 / num_assets)
             weights = None

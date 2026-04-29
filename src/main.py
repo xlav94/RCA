@@ -74,8 +74,7 @@ def make_env(df_env, df_feat_env, stocks_env, objective_env, window_size_env, en
 
 def seed_everything(seed_init: int):
     random.seed(seed_init)
-    os.environ['PYTHONHASHSEED'] = str(seed_init)
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    # os.environ['PYTHONHASHSEED'] = str(seed_init)
     np.random.seed(seed_init)
     torch.manual_seed(seed_init)
     if torch.cuda.is_available():
@@ -83,8 +82,7 @@ def seed_everything(seed_init: int):
         torch.cuda.manual_seed_all(seed_init)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.enabled = False
-    torch.use_deterministic_algorithms(True)
+    #torch.use_deterministic_algorithms(True)
 
 def train(algo, train_seed=None):
     env_fns = [make_env(df_train, df_feat_train, stocks, objective, window_size, env_name, i) for i in range(num_cpu)]

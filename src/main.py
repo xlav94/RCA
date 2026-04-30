@@ -74,7 +74,7 @@ def make_env(df_env, df_feat_env, stocks_env, objective_env, window_size_env, en
 
 def seed_everything(seed_init: int):
     random.seed(seed_init)
-    os.environ['PYTHONHASHSEED'] = str(seed_init)
+    # os.environ['PYTHONHASHSEED'] = str(seed_init)
     np.random.seed(seed_init)
     torch.manual_seed(seed_init)
     if torch.cuda.is_available():
@@ -82,6 +82,7 @@ def seed_everything(seed_init: int):
         torch.cuda.manual_seed_all(seed_init)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+    #torch.use_deterministic_algorithms(True)
 
 def train(algo, train_seed=None):
     env_fns = [make_env(df_train, df_feat_train, stocks, objective, window_size, env_name, i) for i in range(num_cpu)]
@@ -96,8 +97,8 @@ def train(algo, train_seed=None):
             vec_env,
             training=True,
             norm_obs=True,
-            norm_reward=False,
-            clip_reward=100,
+            norm_reward=True,
+            clip_reward=20,
         )
 
     if checkpoint:
@@ -167,6 +168,11 @@ def test(algo, model_path, env_path, seed: int):
     step = 0
     step_daily_return = window_size
 
+    portfolio_returns_history = []
+    benchmark_returns_history = []
+    peak_agent = 1.0
+    peak_bench = 1.0
+    risk_free_rate = 0.0
     while not done:
         action, _ = model.predict(obs, deterministic=True)
 
@@ -182,6 +188,56 @@ def test(algo, model_path, env_path, seed: int):
 
         daily_market_return = df_benchmark[[f'{s}_ret' for s in stocks]].iloc[step_daily_return].mean()
         total_cum_return_hold *= (1 + daily_market_return)
+        portfolio_returns_history.append(info["portfolio_return"])
+        benchmark_returns_history.append(daily_market_return)
+        # --- CALCUL DU MAXIMUM DRAWDOWN (En temps réel) ---
+        if total_cumulative_return > peak_agent:
+            peak_agent = total_cumulative_return
+        if total_cum_return_hold > peak_bench:
+            peak_bench = total_cum_return_hold
+
+        dd_agent = (total_cumulative_return - peak_agent) / peak_agent
+        dd_bench = (total_cum_return_hold - peak_bench) / peak_bench
+
+        writer.add_scalars("Risk/Drawdown", {
+            "Agent_PPO": dd_agent,
+            "Buy_and_Hold": dd_bench
+        }, step)
+        # ----------------------------------------------------
+
+        # --- CALCUL DU SHARPE ET SORTINO RATIO ---
+        # On attend d'avoir au moins 10 jours de données pour éviter de diviser par zéro ou d'avoir des stats aberrantes
+        if step > 10:
+            # Métriques Agent
+            agent_arr = np.array(portfolio_returns_history)
+            mean_agent = np.mean(agent_arr) - risk_free_rate
+            std_agent = np.std(agent_arr) + 1e-8
+            downside_agent = agent_arr[agent_arr < 0]
+            downside_std_agent = np.std(downside_agent) + 1e-8 if len(downside_agent) > 0 else 1e-8
+
+            sharpe_agent = (mean_agent / std_agent) * np.sqrt(252)
+            sortino_agent = (mean_agent / downside_std_agent) * np.sqrt(252)
+
+            # Métriques Benchmark
+            bench_arr = np.array(benchmark_returns_history)
+            mean_bench = np.mean(bench_arr) - risk_free_rate
+            std_bench = np.std(bench_arr) + 1e-8
+            downside_bench = bench_arr[bench_arr < 0]
+            downside_std_bench = np.std(downside_bench) + 1e-8 if len(downside_bench) > 0 else 1e-8
+
+            sharpe_bench = (mean_bench / std_bench) * np.sqrt(252)
+            sortino_bench = (mean_bench / downside_std_bench) * np.sqrt(252)
+
+            writer.add_scalars("Risk_Adjusted_Returns/Sharpe_Ratio", {
+                "Agent_PPO": sharpe_agent,
+                "Buy_and_Hold": sharpe_bench
+            }, step)
+
+            writer.add_scalars("Risk_Adjusted_Returns/Sortino_Ratio", {
+                "Agent_PPO": sortino_agent,
+                "Buy_and_Hold": sortino_bench
+            }, step)
+        # ----------------------------------------------------
         writer.add_scalars("Comparison/Cumulative_Return", {
             "Agent_PPO": total_cumulative_return - 1,
             "Buy_and_Hold": total_cum_return_hold - 1
@@ -206,7 +262,7 @@ if __name__ == "__main__":
         seed_everything(train_seed)
         train(algo_type, train_seed=train_seed)
     else:
-        env = 'models/mul_30M/envs/PPO_seed_13_env.pkl'
-        model = 'models/mul_30M/PPO_agent_checkpoints_seed_13_2026-04-08-15-33/PPO_agent_10000000_steps.zip'
+        env = 'models/downside/PPO_seed_42_env.pkl'
+        model = 'models/downside/ppo_agent_10000000_seed_42_2026-04-30-07-43.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)

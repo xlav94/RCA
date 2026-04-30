@@ -16,7 +16,7 @@ class CustomEnv(gym.Env):
         self.window_size = window_size
         self.initial_balance = float(initial_balance)
         self.env_name = env_name
-        self.num_assets = len(stocks)
+        self.num_assets = len(stocks) + 1  # +1 for cash
         self.weights = np.full(self.num_assets, 1 / self.num_assets)
         self.po = PortfolioOptimizer(lower_bound=0., upper_bound=0.10)
 
@@ -60,7 +60,7 @@ class CustomEnv(gym.Env):
         super().reset(seed=seed)
         self.current_step = self.window_size
         self.weights = np.zeros(self.num_assets, dtype=np.float32)  # Start with 0% in assets (all cash)
-
+        self.weights[-1] = 1.0  # 100% cash
         return self._get_observation(), {}
 
     def step(self, action : np.ndarray):

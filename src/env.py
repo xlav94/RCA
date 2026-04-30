@@ -59,8 +59,7 @@ class CustomEnv(gym.Env):
     def reset(self, seed=None, options=None) -> tuple[dict, dict]:
         super().reset(seed=seed)
         self.current_step = self.window_size
-        self.weights = np.zeros(self.num_assets, dtype=np.float32)  # Start with 0% in assets (all cash)
-        self.weights[-1] = 1.0  # 100% cash
+        self.weights = np.full(self.num_assets, 1 / self.num_assets)
         return self._get_observation(), {}
 
     def step(self, action : np.ndarray):

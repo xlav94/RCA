@@ -262,7 +262,7 @@ if __name__ == "__main__":
         seed_everything(train_seed)
         train(algo_type, train_seed=train_seed)
     else:
-        env = 'models/downside/PPO_seed_42_env.pkl'
-        model = 'models/downside/ppo_agent_10000000_seed_42_2026-04-30-07-43.zip'
+        env = 'models/test2/PPO_seed_42_env.pkl'
+        model = 'models/test2/ppo_agent_10000000_seed_42_2026-04-30-19-33.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)

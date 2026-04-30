@@ -61,7 +61,7 @@ class PortfolioOptimizer:
         num_assets = len(mu_jax)
         lower_bounds_arr = jnp.full(num_assets, self.lower_bound)
         upper_bounds_arr = jnp.full(num_assets, self.upper_bound)
-        upper_bounds_arr = upper_bounds_arr.at[-1].set(1.0)
+        upper_bounds_arr = upper_bounds_arr.at[-1].set(0.5)
         weights = minimize_jax(objective, initial_weights_jax, mu_jax, returns_jax,
                                 cov_matrix_jax,
                                 lower_bounds_arr, upper_bounds_arr)

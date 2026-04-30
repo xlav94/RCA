@@ -584,9 +584,12 @@ such as SAC or TD3, and extending the framework to incorporate richer market sig
 as the Black-Litterman model.
 
 \section{Team Contributions}
-All three members collaborated throughout the project, contributing to the overall system design, the analysis
-and interpretation of results, and the writing of this report. The following describes the primary technical
-responsibilities of each member.
+All three members were actively involved across the full project lifecycle, from the initial literature review and
+system design, through implementation, experimentation, and training, to the analysis and interpretation of results and
+the final presentation. While the following describes the primary technical responsibilities of each member, the
+boundaries between these roles were fluid in practice, with each member contributing ideas, feedback, and effort beyond
+their designated area.
+
 The source code for this project is available at \url{https://github.com/xlav94/RCA}.
 
 \textbf{Cédric Guévremont} was responsible for the model and learning architecture.
@@ -597,11 +600,37 @@ Mean-Semi-deviation (PMPT) objectives and their constrained optimization.
 \textbf{Rima Boujenane} was responsible for the data pipeline and feature engineering. This includes the retrieval and
 preprocessing of historical market data via the Yahoo Finance API, the implementation of the incremental CSV caching
 system, the chronological train/test split, and the fractional differentiation pipeline, including the per-asset
-selection of the integration order $d_i$ via Augmented Dickey-Fuller testing on the training set.
+selection of the integration order $d_i$ via Augmented Dickey-Fuller testing on the training set. She also took the lead in
+structuring and writing this report.
 
 \textbf{Abdel Ghafour Rahmouni} was responsible for the trading environment. This includes the design and implementation
 of the custom \texttt{Gymnasium}-compatible environment, the observation and action space definitions, and the reward
-function incorporating portfolio return and transaction penalties.
+function incorporating portfolio return and transaction penalties. He also developed the visualization of the experimental
+results, including the cumulative return plots.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 \newpage
 

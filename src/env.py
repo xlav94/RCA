@@ -127,7 +127,7 @@ class CustomEnv(gym.Env):
         assets_log_returns = np.log(current_prices / previous_prices)
         log_returns = np.dot(portfolio_weights, assets_log_returns)
         portfolio_return = np.dot(portfolio_weights, assets_returns)
-        downside_penalty = 0.5 * min(0, portfolio_return)**2
+        downside_penalty = abs(min(0, portfolio_return))
 
         # Penalite si changement de poids important (pour encourager la stabilité du portefeuille)
         if self.current_step == self.window_size:

@@ -24,14 +24,12 @@ def objective_pmpt_jax(weights, mu, returns, cov_matrix, l=1.0, epsilon=1e-5):
     downside_risk = jnp.sqrt(jnp.mean(jnp.minimum(0, historical_port_return) ** 2) + epsilon)
     return -(port_return - l * downside_risk)
 
-@jit(static_argnames=['objective', 'lower_bound', 'upper_bound'])
+@jit(static_argnames=['objective'])
 def minimize_jax(objective, initial_weights, mu, returns, cov_matrix,
                  lower_bound, upper_bound):
-    low = jnp.full_like(initial_weights, lower_bound)
-    high = jnp.full_like(initial_weights, upper_bound)
     w_coeffs = jnp.ones_like(initial_weights)
     c_target = 1.0
-    my_hyperparams = (low, high, w_coeffs, c_target)
+    my_hyperparams = (lower_bound, upper_bound, w_coeffs, c_target)
 
     def projection_box_section_custom(x, _unused_hyperparams=None):
         return projection_box_section(x, my_hyperparams, check_feasible=False)
@@ -49,7 +47,7 @@ def minimize_jax(objective, initial_weights, mu, returns, cov_matrix,
             cov_matrix=cov_matrix).params
 
 class PortfolioOptimizer:
-    def __init__(self, lower_bound : float=0.0, upper_bound : float=0.20):
+    def __init__(self, lower_bound : float=0.0, upper_bound : float=0.30):
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
 
@@ -60,7 +58,11 @@ class PortfolioOptimizer:
         initial_weights_jax = jnp.array(initial_weights_np)
         lw = LedoitWolf().fit(returns_df)
         cov_matrix_jax = jnp.array(lw.covariance_)
+        num_assets = len(mu_jax)
+        lower_bounds_arr = jnp.full(num_assets, self.lower_bound)
+        upper_bounds_arr = jnp.full(num_assets, self.upper_bound)
+        upper_bounds_arr = upper_bounds_arr.at[-1].set(1.0)
         weights = minimize_jax(objective, initial_weights_jax, mu_jax, returns_jax,
                                 cov_matrix_jax,
-                                self.lower_bound, self.upper_bound)
+                                lower_bounds_arr, upper_bounds_arr)
         return np.array(weights)

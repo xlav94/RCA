@@ -74,7 +74,20 @@ class DataPipeline:
     def get_env_data(self, feature: str = 'Open') -> pd.DataFrame:
         """Returns the raw price matrix ready for the environment."""
         raw_df = self._get_raw()
+
+        cash_col_name = f"{feature}_CASH"
+        initial_price = 10.0
+        annual_rate = 0.05
+
+        # Calcul du multiplicateur quotidien (Intérêts composés)
+        daily_multiplier = (1 + annual_rate) ** (1 / 252)
+
+        # Création de la courbe de prix parfaite
+        steps = np.arange(len(raw_df))
+        raw_df[cash_col_name] = initial_price * (daily_multiplier ** steps)
+
         ordered_cols = [f"{feature}_{ticker}" for ticker in self.tickers]
+        ordered_cols.append(cash_col_name)
         for col in ordered_cols:
             if col not in raw_df.columns:
                 raise ValueError(f"Missing required column: {col}")

@@ -97,6 +97,37 @@ class TestDataDownloader(unittest.TestCase):
             self.downloader.fetch_data()
             mock_download.assert_not_called()
 
+class TestChronologicalSplit(unittest.TestCase):
+    def setUp(self):
+        np.random.seed(42)
+        dates = pd.date_range(start="2023-01-01", periods=100)
+        self.df = pd.DataFrame({
+            'Open_AAPL': np.linspace(100, 150, 100),
+            'Open_MSFT': np.linspace(200, 250, 100),
+        }, index=dates)
+
+    def test_split_ratio(self):
+        train_size = int(len(self.df) * 0.8)
+        df_train = self.df.iloc[:train_size]
+        df_test = self.df.iloc[train_size:]
+
+        self.assertEqual(len(df_train), 80)
+        self.assertEqual(len(df_test), 20)
+
+    def test_split_no_overlap(self):
+        train_size = int(len(self.df) * 0.8)
+        df_train = self.df.iloc[:train_size]
+        df_test = self.df.iloc[train_size:]
+
+        overlap = df_train.index.intersection(df_test.index)
+        self.assertEqual(len(overlap), 0)
+
+    def test_split_chronological_order(self):
+        train_size = int(len(self.df) * 0.8)
+        df_train = self.df.iloc[:train_size]
+        df_test = self.df.iloc[train_size:]
+
+        self.assertTrue(df_train.index[-1] < df_test.index[0])
 
 if __name__ == "__main__":
     unittest.main()

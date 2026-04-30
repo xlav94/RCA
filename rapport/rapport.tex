@@ -110,9 +110,8 @@ data-driven adaptation. The model processes both historical price sequences, usi
 the current portfolio state to generate allocation decisions.
 
 Experiments on a diversified portfolio of 21 assets show that the proposed approach achieves competitive cumulative
-returns compared to an equally-weighted benchmark, while demonstrating more stable behavior during periods of market
-drawdown. However, results also highlight significant variability across training runs, reflecting the sensitivity of
-deep reinforcement learning methods to initialization and training conditions.
+returns compared to an equally-weighted benchmark. However, results also highlight significant variability across
+training runs, reflecting the sensitivity of deep reinforcement learning methods to initialization and training conditions.
 
 Overall, this work suggests that combining reinforcement learning with simple financial optimization rules is a
 promising direction for building more robust and risk-aware portfolio management strategies.
@@ -124,27 +123,36 @@ Portfolio management has traditionally been guided by Modern Portfolio Theory (M
 a given level of risk through diversification. Post-Modern Portfolio Theory (PMPT) extends this idea by distinguishing
 between desirable and undesirable fluctuations, focusing specifically on downside risk rather than overall volatility.
 Both approaches, however, rely on static optimization and do not adapt well to the constantly changing nature of
-financial markets.\\\\
+financial markets.
+
 At the same time, recent advances in machine learning, particularly in reinforcement learning, have introduced more
 adaptive approaches to portfolio management. However, many of these methods lack a strong grounding in financial theory,
 often prioritizing performance without explicitly controlling for risk, leaving a gap between adaptability and disciplined
-risk management.\\\\
+risk management.
+
 In this project, we study a reinforcement learning agent designed to manage a portfolio composed of a limited number of
 financial assets and an initial capital. At each time step, the agent observes the market through a sliding window of
-historical price data, transformed using fractional differentiation to retain long-term dependencies while ensuring
+historical price data, enriched with fractional differentiation to retain long-term dependencies while ensuring
 stationarity. Based on this information, the agent adjusts the portfolio allocation across assets, and its decisions are
-evaluated through a reward function that accounts for both returns and risk.\\\\
+evaluated through a reward function that accounts for both returns and risk.
+
 To bridge the gap between static financial theory and adaptive learning, we introduce a hybrid approach, in which the
 agent's decisions are passed through an optimization layer that implements either a Mean-Variance (MPT) or a
 Mean-Semi-deviation (PMPT) objective, so that the final allocations explicitly balance expected returns with risk
-considerations. This integration allows us to leverage the adaptability of reinforcement learning while ensuring that
-the agent's behavior remains consistent with established financial principles. The learning process is based on the
+considerations. This design introduces a separation of responsibilities: the agent focuses on predicting
+expected returns, while the optimization layer handles risk management. Without this layer,
+the agent would need to learn both tasks simultaneously from reward signals alone, making it a significantly harder problem.
+This integration allows us to leverage the adaptability of reinforcement learning while ensuring that the agent's behavior
+remains consistent with established financial principles. The learning process is based on the
 Proximal Policy Optimization (PPO) algorithm, an on-policy actor-critic method in which the actor suggests actions while
 the critic evaluates their quality and guides the learning process. PPO's ability to constrain policy updates ensures
-stable and progressive improvements without unlearning previously acquired knowledge.\\\\
-The main objective of this project is to evaluate the extent to which the combination of recurrent neural networks
-(RNN/LSTM) and reinforcement learning can reduce the overall risk of a financial portfolio in a sequential decision-making
-context, while maintaining competitive returns compared to traditional benchmarks.\\\\
+stable and progressive improvements without unlearning previously acquired knowledge.
+
+The main objective of this project is twofold: first, to combine recurrent neural networks (RNN/LSTM) and reinforcement
+learning to manage a financial portfolio in a sequential decision-making context; and second, to integrate classical financial
+optimizers, MPT and PMPT, directly into the agent's decision pipeline, in order to produce allocation strategies that are\
+both adaptive and explicitly risk-aware.
+
 The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work on reinforcement
 learning and portfolio optimization. Section~\ref{sec:methods} describes the proposed architecture, including the
 feature engineering pipeline, the PPO agent, and the financial optimization layer. Section~\ref{sec:results} presents
@@ -234,7 +242,8 @@ a financial optimization layer to produce the final portfolio weights. The rewar
 Raw asset prices present a fundamental challenge for learning models: they are non-stationary, meaning their statistical
 properties drift over time, making it difficult for the agent to generalize across market regimes. A naive solution is
 to use daily log-returns, which are stationary but discard all long-range memory, and the agent loses any sense of the
-broader price trend. \\\\
+broader price trend.
+
 Fractional differentiation offers a principled middle ground, producing a signal that is stationary while retaining
 meaningful historical dependencies.
 
@@ -289,7 +298,7 @@ To process the structured observation space, we implement a custom feature extra
 
 \begin{itemize}
     \item \textbf{LSTM stream:} A Long Short-Term Memory (LSTM) network, configured
-    with 2 layers, a hidden size of 128, and a dropout rate of 0.2, processes the
+    with 2 layers and a hidden size of 128, processes the
     $W \times N$ market history matrix to capture temporal dependencies and momentum
     patterns across the 60-day rolling window. The final hidden state
     $h_T \in \mathbb{R}^{128}$ serves as a compact summary of recent market dynamics.
@@ -306,9 +315,8 @@ fed into the PPO actor-critic network.
 The learning agent is built around Proximal Policy Optimization (PPO), an on-policy actor-critic algorithm implemented
 via Stable-Baselines3. The actor network takes the combined feature vector as input and outputs a continuous action
 $\mathbf{a}_t \in [-1, 1]^N$, interpreted as expected returns $\boldsymbol{\mu}$. The critic network independently
-estimates the value of the current state to guide policy updates. PPO constrains the magnitude of each policy update
-through a clipped surrogate objective, preventing the agent from making overly aggressive changes that could
-destabilize the learned policy.
+estimates the value of the current state to guide policy updates. PPO constrains the magnitude of each policy update,
+preventing the agent from making overly aggressive changes that could destabilize the learned policy.
 \subsubsection*{Financial Optimization Layer}
 \label{sec:optimizers}
 Rather than using the actor's output as portfolio weights directly, we pass it through a financial optimization layer
@@ -454,9 +462,9 @@ allocation decisions.
 \subsection{Training}
 \label{sec:training}
 Training is conducted using 8 parallel environments via \texttt{SubprocVecEnv}, which allows the agent to collect
-experience across multiple independent market simulations simultaneously and accelerates convergence. Observations
-are normalized online using \texttt{VecNormalize}, which standardizes both the observation space and the reward
-signal with a running mean and variance estimate, stabilizing training across the wide range of asset return magnitudes.
+experience across multiple independent market simulations simultaneously and accelerates convergence. The entire
+environment is normalized online using \texttt{VecNormalize}, which standardizes both observations and rewards using a
+running mean and variance estimate, stabilizing training across the wide range of asset return magnitudes.
 
 The PPO agent is trained for a total of 20 million timesteps, with model checkpoints saved every 5 million steps to
 allow for post-hoc selection of the best policy.
@@ -498,11 +506,7 @@ buy-and-hold benchmark over the 803-day test horizon. The shaded region around t
 deviation across the 4 evaluation seeds, reflecting the variance of the learned policy under different random initializations.
 
 The PPO agent achieves a mean cumulative return of 84.94\% over the test horizon, compared to 80.68\% for the
-equally-weighted buy-and-hold benchmark. Both curves track closely through the first 300 steps, suggesting that the
-agent has not yet differentiated its strategy from passive allocation early in the test horizon. From step 300 onward,
-the agent's curve begins to diverge upward, and this gap widens progressively through the end of the test period.
-Notably, around step 580-600, the benchmark experiences a sharp drawdown, while the PPO agent's curve remains
-comparatively more stable, which is consistent with the risk-aware design of the reward function and the downside-focused PMPT optimizer.
+equally-weighted buy-and-hold benchmark.
 
 The variance across seeds, visible in the shaded region, is nonetheless  non-negligible, particularly in the second
 half of the test horizon where the spread widens considerably. This sensitivity to random initialization is an
@@ -530,9 +534,8 @@ it makes it harder to draw strong conclusions from a single run.
 
 This variation is made worse by hardware constraints. Training for 20 million timesteps with 8 parallel environments is
 computationally expensive, and using \texttt{SubprocVecEnv} introduces additional randomness due to parallel execution.
-As a result, runs are not perfectly reproducible, even when using fixed seeds. Getting fully reproducible results in
-this setting would require stricter control over randomness and deterministic GPU operations, which would significantly
-increase computation time.
+As a result, runs are not perfectly reproducible, even when using fixed seeds.
+
 Finally, the long training time limited how much hyperparameter tuning we could do. Parameters such as the risk aversion
 coefficient $\lambda$, the observation window size $W$, and the learning rate were chosen based on a few initial
 experiments rather than a thorough search. This means that better configurations may exist but were not explored.
@@ -546,9 +549,7 @@ to changing market conditions through trial and error. The result is a framework
 discipline of classical financial theory and the flexibility of modern reinforcement learning.
 
 Over an 803-day out-of-sample test horizon, the PPO agent achieves a mean cumulative return of 84.94\%, compared to
-80.68\% for the equally-weighted buy-and-hold benchmark. Beyond raw returns, the agent demonstrates comparatively more
-stable behavior during periods of market stress, which is consistent with the downside-focused design of the PMPT
-optimizer and the transaction penalty embedded in the reward function. These results suggest that the proposed hybrid
+80.68\% for the equally-weighted buy-and-hold benchmark. These results suggest that the proposed hybrid
 approach is a promising direction for building portfolio management systems that are both adaptive and financially
 grounded.
 
@@ -556,19 +557,22 @@ That said, the sensitivity of the learned policy to random initialization remain
 of systematic hyperparameter tuning leaves open the question of how much further the approach can be pushed. Future work
 should focus on improving training stability across seeds, exploring alternative deep reinforcement learning algorithms
 such as SAC or TD3, and extending the framework to incorporate richer market signals or alternative risk objectives such
-as the Black-Litterman model. More broadly, the modular design of the optimization layer makes this framework naturally
-extensible to other sequential decision-making domains beyond finance.
+as the Black-Litterman model.
 
 \section{Team Contributions}
+All three members collaborated throughout the project, contributing to the overall system design, the analysis
+and interpretation of results, and the writing of this report. The following describes the primary technical
+responsibilities of each member.
+
 \textbf{Cédric Guévremont} was responsible for the model and learning architecture.
 This includes the design and implementation of the \texttt{CustomCombinedExtractor} feature extractor, the PPO agent
 configuration, and the integration of the financial optimization layer, including the Mean-Variance (MPT) and
-Mean-Semi-deviation (PMPT) objectives and their constrained optimization via SLSQP.
+Mean-Semi-deviation (PMPT) objectives and their constrained optimization.
 
 \textbf{Rima Boujenane} was responsible for the data pipeline and feature engineering. This includes the retrieval and
 preprocessing of historical market data via the Yahoo Finance API, the implementation of the incremental CSV caching
-system, and the fractional differentiation procedure, including the per-asset selection of the integration order $d_i$
-via ADF testing on the training set.
+system, the chronological train/test split, and the fractional differentiation pipeline, including the per-asset
+selection of the integration order $d_i$ via Augmented Dickey-Fuller testing on the training set.
 
 \textbf{Abdel Ghafour Rahmouni} was responsible for the trading environment. This includes the design and implementation
 of the custom \texttt{Gymnasium}-compatible environment, the observation and action space definitions, and the reward

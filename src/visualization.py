@@ -183,9 +183,9 @@ def build_mean_from_tensorboard(log_dirs, results_df):
         df_agent = df_agent.sort_values("step").reset_index(drop=True)
 
         # compute daily returns from cumulative returns
-        df_agent[f"agent_daily_return_{i}"] = (
-            df_agent["agent_cumulative_return"].pct_change()
-        )
+        wealth = 1.0 + df_agent["agent_cumulative_return"]
+        df_agent[f"agent_daily_return_{i}"] = wealth / wealth.shift(1) - 1.0
+        df_agent[f"agent_daily_return_{i}"] = df_agent[f"agent_daily_return_{i}"].fillna(0)
 
         df_agent = df_agent.rename(columns={
             "agent_cumulative_return": f"agent_model_{i}"
@@ -449,47 +449,74 @@ def plot_risk_return_scatter(results_df, df_test, stocks, window_size, save_path
 
     return scatter_df
 
-def compute_sharpe_ratio(results_df):
+def compute_information_ratio(results_df):
     """
-    Compute Sharpe ratio for agent and Buy&Hold
-    """
-    agent_returns = results_df["agent_cumulative_return_mean"].dropna().values
-    benchmark_returns = results_df["benchmark_cumulative_return"].dropna().values
-    #agent_returns = results_df["agent_daily_return_mean"].dropna().values
-    #benchmark_returns = results_df["benchmark_daily_return"].dropna().values
+    Compute Information Ratio (IR) of the agent vs benchmark using daily returns.
 
+    Parameters:
+    - results_df: DataFrame containing:
+        * agent_daily_return_mean
+        * benchmark_daily_return
+
+    Returns:
+    - annualized Information Ratio
+    """
+    # Get daily returns
+    agent_returns = results_df["agent_daily_return_mean"].dropna().values
+    benchmark_returns = results_df["benchmark_daily_return"].dropna().values
+
+    # Align lengths
+    min_len = min(len(agent_returns), len(benchmark_returns))
+    agent_returns = agent_returns[:min_len]
+    benchmark_returns = benchmark_returns[:min_len]
+
+    # Excess returns
     excess_returns = agent_returns - benchmark_returns
-    vol = np.std(excess_returns, ddof=1)
-    if vol == 0:
+
+    # Tracking error
+    tracking_error = np.std(excess_returns, ddof=1)
+    if tracking_error == 0:
         return np.nan
-    return np.mean(excess_returns) / vol
 
-def plot_raw_vs_norm_sharpe(raw_df, norm_df):
-    plt.figure(figsize=(12, 6))
+    # Annualized Information Ratio
+    ir = (np.mean(excess_returns) / tracking_error) * np.sqrt(252)
 
-    plt.plot(raw_df["step"], raw_df["sharpe_mean"], label="Raw env")
-    plt.fill_between(
-        raw_df["step"],
-        raw_df["sharpe_mean"] - raw_df["sharpe_std"],
-        raw_df["sharpe_mean"] + raw_df["sharpe_std"],
-        alpha=0.2
-    )
+    return ir
 
-    plt.plot(norm_df["step"], norm_df["sharpe_mean"], label="Normalized env")
-    plt.fill_between(
-        norm_df["step"],
-        norm_df["sharpe_mean"] - norm_df["sharpe_std"],
-        norm_df["sharpe_mean"] + norm_df["sharpe_std"],
-        alpha=0.2
-    )
 
-    plt.axhline(0, linestyle="--", color="black")
-    plt.title("Rolling Sharpe: Raw vs Normalized")
-    plt.xlabel("Step")
-    plt.ylabel("Sharpe Ratio")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+def compute_sharpe_ratio(results_df, risk_free_annual=0.0):
+    """
+    Compute Sharpe ratio for the agent using daily returns.
+
+    Parameters:
+    - results_df: DataFrame containing agent_daily_return_mean
+    - risk_free_annual: annual risk-free rate
+
+    Returns:
+    - annualized Sharpe ratio
+    """
+    # Convert annual risk-free rate to daily
+    rf_daily = risk_free_annual / 252
+
+    # Get daily returns
+    agent_returns = results_df["agent_daily_return_mean"].dropna().values
+    benchmark_returns = results_df["benchmark_daily_return"].dropna().values
+
+    # Excess returns
+    agent_excess_returns = agent_returns - rf_daily
+    benchmark_excess_returns = benchmark_returns - rf_daily
+
+    # Volatility
+    agent_vol = np.std(agent_excess_returns, ddof=1)
+    benchmark_vol = np.std(benchmark_excess_returns, ddof=1)
+    if agent_vol == 0 or benchmark_vol == 0:
+        return np.nan
+
+    # Annualized Sharpe ratio
+    agent_sharpe = (np.mean(agent_excess_returns) / agent_vol) * np.sqrt(252)
+    benchmakr_sharpe = (np.mean(benchmark_excess_returns) / benchmark_vol) * np.sqrt(252)
+
+    return agent_sharpe, benchmakr_sharpe
 
 def compute_alpha(results_df, risk_free_rate=0.0, ann_factor=252):
     """
@@ -534,7 +561,7 @@ def main():
     stocks = env_cfg["stocks"]
     window_size = env_cfg["window_size"]
 
-    log_path = "tensorboard_logs/test_results_seed_4_2026-03-27-16-55"
+    log_path = "tensorboard_logs/mul_PMPT_20M/test_results_2026-04-08-18-32"
     results_df = build_results_df_from_tensorboard(log_path)
 
 
@@ -599,9 +626,11 @@ def main():
     )
     scatter_df.to_csv(f"{plots_dir}/risk_return_scatter.csv", index=False)
 
-
+    information_ratio = compute_information_ratio(mean_raw_df)
+    print(f"Information ratio: {information_ratio}")
     sharpe = compute_sharpe_ratio(mean_raw_df)
-    print(f"Sharpe ratio: {sharpe}")
+    print(f"Sharpe ratio (agent): {sharpe[0]}")
+    print(f"Sharpe ratio (benchmark): {sharpe[1]}")
 
     alpha = compute_alpha(results_df)
 

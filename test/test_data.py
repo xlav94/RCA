@@ -2,7 +2,7 @@ import unittest
 import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock
-from src.data import DataPipeline
+from src.data import DataPipeline, DataDownloader
 
 
 class TestDataPipeline(unittest.TestCase):
@@ -44,6 +44,58 @@ class TestDataPipeline(unittest.TestCase):
         env_df = self.pipeline.get_env_data(feature='Open')
         expected_cols = [f"Open_{t}" for t in self.tickers]
         self.assertEqual(list(env_df.columns), expected_cols)
+
+class TestDataDownloader(unittest.TestCase):
+    def setUp(self):
+        self.tickers = ["AAPL", "MSFT"]
+        self.downloader = DataDownloader(
+            tickers=self.tickers,
+            start_date="2023-01-01",
+            end_date="2024-01-01"
+        )
+
+    @patch("src.data.yf.download")
+    @patch("src.data.os.path.exists")
+    def test_fetch_data_downloads_when_no_cache(self, mock_exists, mock_download):
+        mock_exists.return_value = False
+
+        dates = pd.date_range(start="2023-01-01", periods=10)
+        arrays = [
+            ["Open", "Open", "Close", "Close"],
+            ["AAPL", "MSFT", "AAPL", "MSFT"]
+        ]
+        tuples = list(zip(*arrays))
+        index = pd.MultiIndex.from_tuples(tuples)
+        fake_df = pd.DataFrame(
+            np.random.rand(10, 4),
+            index=dates,
+            columns=index
+        )
+        mock_download.return_value = fake_df
+
+        with patch("builtins.open", unittest.mock.mock_open()):
+            with patch("pandas.DataFrame.to_csv"):
+                result = self.downloader.fetch_data()
+
+        mock_download.assert_called_once()
+        self.assertIsInstance(result, pd.DataFrame)
+
+    @patch("src.data.pd.read_csv")
+    @patch("src.data.os.path.exists")
+    def test_fetch_data_uses_cache_when_up_to_date(self, mock_exists, mock_read_csv):
+        mock_exists.return_value = True
+
+        dates = pd.date_range(start="2023-01-01", periods=10)
+        fake_cached = pd.DataFrame({
+            'Open_AAPL': np.linspace(100, 110, 10),
+            'Open_MSFT': np.linspace(200, 210, 10),
+        }, index=dates)
+        mock_read_csv.return_value = fake_cached
+
+        with patch("src.data.yf.download") as mock_download:
+            self.downloader.end_date = "2023-01-10"
+            self.downloader.fetch_data()
+            mock_download.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -161,38 +161,60 @@ Section~\ref{sec:conclusion} concludes and outlines directions for future work.
 
 \section{Related Works}
 \label{sec:related}
-
 \subsection{Foundational Financial Theories}
+Traditional portfolio optimization methods, such as Markowitz's Modern Portfolio Theory (MPT)
+\citep{markowitz1952portfolio}, have been the industry standard for decades to balance risk and return through
+diversification. While effective in theory, MPT relies on static rules that often struggle to keep up with the chaotic,
+fast-moving reality of today's markets.
+Post-Modern Portfolio Theory (PMPT) was introduced by \citet{rom1993postmodern} as a refinement of MPT, replacing
+variance with downside deviation as the measure of risk, that is, penalizing only returns that fall below a target
+threshold rather than treating upside and downside fluctuations symmetrically. This asymmetric treatment better reflects
+the actual preferences of investors and provides a more nuanced framework for portfolio optimization under uncertainty.
 
-Traditional portfolio optimization methods, such as Markowitz's Modern Portfolio Theory (MPT) \citep{markowitz1952portfolio}, have been the industry standard for decades to balance risk and return through diversification. While effective in theory, MPT relies on static rules that often struggle to keep up with the chaotic, fast-moving reality of today's markets.
+With the rise of machine learning, new approaches have emerged to tackle these limitations. \citet{jang2023deep} proposed
+integrating Deep Reinforcement Learning (DRL) with Technical Analysis and Modern Portfolio Theory constraints. Unlike
+traditional supervised learning models that merely predict prices, DRL agents learn sequential decision-making policies
+directly through interaction with the market environment. This transition from static allocation to dynamic portfolio
+management is emphasized in the comprehensive survey by \citet{pippas2025evolution}, which traces the evolution of
+reinforcement learning techniques in quantitative finance.
 
-With the rise of machine learning, new approaches have emerged to tackle these limitations. \citet{jang2023deep} proposed integrating Deep Reinforcement Learning (DRL) with Technical Analysis and Modern Portfolio Theory constraints. Unlike traditional supervised learning models that merely predict prices, DRL agents learn sequential decision-making policies directly through interaction with the market environment. This transition from static allocation to dynamic portfolio management is emphasized in the comprehensive survey by \citet{pippas2025evolution}, which traces the evolution of reinforcement learning techniques in quantitative finance.
+\subsection{Feature Engineering: Fractional Differentiation in Financial
+Machine Learning}
+A recurring challenge in applying machine learning to financial time series is the stationarity-memory dilemma: raw
+price series are non-stationary, yet standard differencing to achieve stationarity, such as computing logarithmic
+returns, removes most of the long-range dependencies that carry predictive information. Fractional differentiation
+addresses this by applying a non-integer differencing operator $d \in (0, 1)$, producing a series that is stationary
+while retaining meaningful historical memory. \citet{stempień2025comparativeanalysisfinancialdata} demonstrated its
+empirical relevance on four major stock indices, finding that fractionally differentiated inputs consistently
+outperformed logarithmic returns as inputs to a neural network, motivating our use of per-asset ADF-based selection of
+the differentiation parameter.
 
 \subsection{Sequential Modeling and Temporal Dependencies}
-
-Addressing the partial observability of financial markets, \citet{li2015recurrent} introduced a hybrid recurrent reinforcement learning framework integrating RNN-LSTM architectures within a Q-learning setup. Their approach enables agents to maintain memory of historical market states, capturing temporal dependencies that are critical in stochastic and non-stationary environments.
+Addressing the partial observability of financial markets, \citet{li2015recurrent} introduced a hybrid recurrent
+reinforcement learning framework integrating RNN-LSTM architectures within a Q-learning setup. Their approach enables
+agents to maintain memory of historical market states, capturing temporal dependencies that are critical in stochastic
+and non-stationary environments.
 
 \subsection{The Evolution of Deep Reinforcement Learning in Finance}
-
-Building upon classical frameworks, \citet{jang2023deep} combined DRL with MPT constraints using tensor decomposition techniques to manage high-dimensional financial data within structured risk frameworks. Similarly, \citet{jiang2017deep} proposed a CNN-based reinforcement learning framework that automates feature extraction from multi-channel price representations, reducing reliance on handcrafted indicators and improving scalability.
+Building upon classical frameworks, \citet{jang2023deep} combined DRL with MPT constraints using tensor decomposition
+techniques to manage high-dimensional financial data within structured risk frameworks. Similarly, \citet{jiang2017deep}
+proposed a CNN-based reinforcement learning framework that automates feature extraction from multi-channel price
+representations, reducing reliance on handcrafted indicators and improving scalability.
 
 \subsection{Actor-Critic Frameworks}
-
-Modern portfolio optimization strategies predominantly rely on the Actor-Critic architecture, which simultaneously updates a policy network (Actor) and a value function estimator (Critic). As implemented in the FinRL framework \citep{liu2020finrl}, in the ensemble strategy proposed by \citet{yang2025ensemble}, and discussed in \citet{jang2023deep}, actor-critic methods provide improved stability and continuous control capabilities.
-
-\begin{itemize}
-    \item \textbf{DDPG} (Deep Deterministic Policy Gradient) enables continuous portfolio weight allocation and deterministic policy updates.
-    \item \textbf{A2C} (Advantage Actor-Critic) reduces gradient variance using an advantage function, improving robustness in volatile markets.
-    \item \textbf{PPO} (Proximal Policy Optimization) stabilizes training by constraining policy updates through clipped objective functions.
-\end{itemize}
-
-\subsection{Alternative Data and Future Directions}
-
-Recent work incorporates alternative data streams to enrich state representations. \citet{nawathe2024multimodal} integrated financial news sentiment using NLP models such as FinBERT into DRL-based portfolio optimization. Emerging research by \citet{liu2025quantum} explores quantum-enhanced reinforcement learning combined with LSTM forecasting signals to improve convergence stability and performance in noisy financial systems.
+Modern portfolio optimization strategies predominantly rely on the Actor-Critic architecture, which simultaneously
+updates a policy network (Actor) and a value function estimator (Critic). As implemented in the FinRL framework
+\citep{liu2020finrl}, in the ensemble strategy proposed by \citet{yang2025ensemble}, and discussed in \citet{jang2023deep},
+actor-critic methods provide improved stability and continuous control capabilities. Among these, Proximal Policy
+Optimization (PPO) \citep{schulman2017proximal} is particularly well-suited for portfolio management, as it stabilizes training by constraining the
+magnitude of each policy update, preventing the agent from unlearning previously acquired knowledge while ensuring
+progressive improvement.
 
 \subsection{Risk-Aware Rewards and Responsible Management}
-
-To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
+To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions.
+Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate
+market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive
+speculation and enable agents to survive extreme market conditions, including financial crashes.
 
 \section{Methods}
 \label{sec:methods}
@@ -546,7 +568,7 @@ experiments rather than a thorough search. This means that better configurations
 \label{sec:conclusion}
 This work explored the combination of deep reinforcement learning and principled financial optimization for portfolio
 allocation. By embedding a Mean-Variance or  Mean-Semi-deviation optimization layer directly into the agent's action
-pipeline,we ensure that every allocation decision is by construction risk-aware, while still allowing the agent to adapt
+pipeline, we ensure that every allocation decision is by construction risk-aware, while still allowing the agent to adapt
 to changing market conditions through trial and error. The result is a framework that bridges the gap between the static
 discipline of classical financial theory and the flexibility of modern reinforcement learning.
 

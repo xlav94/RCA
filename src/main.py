@@ -96,14 +96,14 @@ def train(algo, train_seed=None):
             vec_env,
             training=True,
             norm_obs=True,
-            norm_reward=True,
-            clip_reward=10.0,
+            norm_reward=False,
+            clip_reward=100,
         )
 
     if checkpoint:
-        checkpoint_dir = f"models/{algo}_agent_checkpoints_seed_{train_seed}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}/"
+        checkpoint_dir = f"models/{algo}_{objective}_agent_checkpoints_seed_{train_seed}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}/"
         checkpoint_callback = CheckpointCallback(
-            save_freq=max(1, 5_000_000 // num_cpu),
+            save_freq=max(1, 10_000_000 // num_cpu),
             save_path=checkpoint_dir,
             name_prefix=f"{algo}_agent",
             save_replay_buffer=True,
@@ -206,7 +206,7 @@ if __name__ == "__main__":
         seed_everything(train_seed)
         train(algo_type, train_seed=train_seed)
     else:
-        env = 'models/mul_PMPT_20M_norm/envs/PPO_seed_4_env.pkl'
-        model = 'models/mul_PMPT_30M/PPO_agent_checkpoints_seed_4_2026-04-02-17-56/PPO_agent_20000000_steps.zip'
+        env = 'models/mul_30M/envs/PPO_seed_13_env.pkl'
+        model = 'models/mul_30M/PPO_agent_checkpoints_seed_13_2026-04-08-15-33/PPO_agent_10000000_steps.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)

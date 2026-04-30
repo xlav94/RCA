@@ -49,7 +49,7 @@ def minimize_jax(objective, initial_weights, mu, returns, cov_matrix,
             cov_matrix=cov_matrix).params
 
 class PortfolioOptimizer:
-    def __init__(self, lower_bound : float=0.0, upper_bound : float=0.1):
+    def __init__(self, lower_bound : float=0.0, upper_bound : float=0.20):
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
 

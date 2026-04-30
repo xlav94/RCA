@@ -353,8 +353,8 @@ where the variables are defined as follows:
     \item $\Sigma \in \mathbb{R}^{n \times n}$ is the \textbf{covariance matrix} of asset returns, representing total risk.
     \item $r_t \in \mathbb{R}^n$ denotes the \textbf{realized return vector} at time $t$ within a look-back window of size $N$.
     \item $\lambda > 0$ is the \textbf{risk aversion coefficient}, which scales the penalty for volatility or downside risk.
-    \item $L, U$ are the \textbf{lower and upper bounds} for individual asset weights (e.g., $L=0, U=0.1$).
-    \item $\epsilon$ is a \textbf{numerical stability constant} ($10^{-5}$) used to ensure the differentiability of the square root in the PMPT objective.
+    \item $L, U$ are the \textbf{lower and upper bounds} for individual asset weights (e.g., $L=0, U=0.2$).
+    \item $\epsilon$ is a \textbf{numerical stability constant} ($10^{-4}$) used to ensure the differentiability of the square root in the PMPT objective.
 \end{itemize}
 
 %Jacobian for Mean Semi-deviation Utility:
@@ -443,9 +443,8 @@ promoting stable, long-term investment strategies. At each time step $t$, the re
     R_t = \underbrace{\sum_{i=1}^{n} w_{i,t} \left( \frac{p_{i,t} - p_{i,t-1}}{p_{i,t-1}} \right)}_{\text{Portfolio Return}} - \underbrace{\lambda \sum_{i=1}^{n} |w_{i,t} - w_{i,t-1}|}_{\text{Transaction Penalty}}
 \end{equation}
 where the variables are defined as follows:
-
 \begin{align*}
-    w_{i,t} &\in [0, 0.1] && \text{portfolio weight assigned to asset } i
+    w_{i,t} &\in [0, 0.2] && \text{portfolio weight assigned to asset } i
                               \text{ at time } t \\
     p_{i,t} &\in \mathbb{R}^+ && \text{opening price of asset } i
                                   \text{ at time } t \\
@@ -466,7 +465,7 @@ experience across multiple independent market simulations simultaneously and acc
 environment is normalized online using \texttt{VecNormalize}, which standardizes both observations and rewards using a
 running mean and variance estimate, stabilizing training across the wide range of asset return magnitudes.
 
-The PPO agent is trained for a total of 20 million timesteps, with model checkpoints saved every 5 million steps to
+The PPO agent is trained for a total of 10 million timesteps, with model checkpoints saved every 5 million steps to
 allow for post-hoc selection of the best policy.
 
 To account for the randomness in reinforcement learning, coming from both weight initialization and environment
@@ -482,17 +481,16 @@ reported in Table~\ref{tab:hyperparams}.
         \toprule
         \textbf{Hyperparameter} & \textbf{Value} \\
         \midrule
-        Total timesteps         & 20,000,000 \\
+        Total timesteps         & 10,000,000 \\
         Batch size              & 2,048 \\
         Rollout length          & 4,096 \\
-        Learning rate           & $5 \times 10^{-5}$ \\
+        Learning rate           & $5 \times 10^{-4}$ \\
         Optimization epochs     & 20 \\
         Parallel environments   & 8 \\
         Checkpoint frequency    & 5,000,000 steps \\
         \midrule
         LSTM hidden size        & 128 \\
         LSTM layers             & 2 \\
-        LSTM dropout            & 0.2 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -515,10 +513,9 @@ inherent challenge of deep reinforcement learning and is discussed further in Se
 \begin{figure}[h!]
     \centering
     \includegraphics[width=0.75\linewidth]{cumulative_return.png}
-    \caption{Mean cumulative return of the PPO agent (blue) across 4 seeds,
-compared against the equally-weighted buy-and-hold benchmark (orange) over
-803 trading days. The shaded region represents the standard deviation across
-seeds.}
+    \caption{Mean cumulative return of the PPO agent across 4 seeds,
+compared against the equally-weighted buy-and-hold benchmark over
+803 trading days.}
     \label{fig:cumret_new}
 \end{figure}
 
@@ -532,9 +529,14 @@ and hyperparameters, Figure~\ref{fig:cumret_new} shows clear differences in perf
 better strategies than others. This kind of sensitivity to initialization is common in deep reinforcement learning, but
 it makes it harder to draw strong conclusions from a single run.
 
-This variation is made worse by hardware constraints. Training for 20 million timesteps with 8 parallel environments is
+This variation is made worse by hardware constraints. Training for 10 million timesteps with 8 parallel environments is
 computationally expensive, and using \texttt{SubprocVecEnv} introduces additional randomness due to parallel execution.
 As a result, runs are not perfectly reproducible, even when using fixed seeds.
+
+Another limitation concerns the portfolio weight constraints imposed on the financial optimization layer. Individual
+asset weights are bounded between $L = 0$ and $U = 0.2$, capping any single position at 20\% of the portfolio. The
+choice of these bounds was not systematically tuned, and different values may lead to meaningfully different
+performance profiles.
 
 Finally, the long training time limited how much hyperparameter tuning we could do. Parameters such as the risk aversion
 coefficient $\lambda$, the observation window size $W$, and the learning rate were chosen based on a few initial

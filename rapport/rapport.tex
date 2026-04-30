@@ -144,9 +144,15 @@ the critic evaluates their quality and guides the learning process. PPO's abilit
 stable and progressive improvements without unlearning previously acquired knowledge.\\\\
 The main objective of this project is to evaluate the extent to which the combination of recurrent neural networks
 (RNN/LSTM) and reinforcement learning can reduce the overall risk of a financial portfolio in a sequential decision-making
-context, while maintaining competitive returns compared to traditional benchmarks.
+context, while maintaining competitive returns compared to traditional benchmarks.\\\\
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work on reinforcement
+learning and portfolio optimization. Section~\ref{sec:methods} describes the proposed architecture, including the
+feature engineering pipeline, the PPO agent, and the financial optimization layer. Section~\ref{sec:results} presents
+and discusses the experimental results. Section~\ref{sec:limitations} discusses the limitations of our approach. Finally,
+Section~\ref{sec:conclusion} concludes and outlines directions for future work.
 
 \section{Related Works}
+\label{sec:related}
 
 \subsection{Foundational Financial Theories}
 
@@ -180,13 +186,13 @@ Recent work incorporates alternative data streams to enrich state representation
 
 To ensure robust and responsible financial decision-making, recent literature emphasizes risk-aware reward functions. Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed by \citet{yang2025ensemble} incorporate market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive speculation and enable agents to survive extreme market conditions, including financial crashes.
 
-
 \section{Methods}
+\label{sec:methods}
 This section describes the main components of the proposed system: the environment and data pipeline, the feature
 engineering process, and the learning architecture, including the integration of the optimization layer and the reward
 function design.
 Together, these elements form an end-to-end pipeline in which a reinforcement learning agent learns to allocate capital
-across a diversified portfolio of financial assets, in a way that balances adaptibility and established financial principles.
+across a diversified portfolio of financial assets, in a way that balances adaptability and established financial principles.
 
 \subsection{Environment and Data Pipeline}
 The portfolio management problem is formulated as a sequential decision-making task within a custom environment
@@ -483,8 +489,8 @@ reported in Table~\ref{tab:hyperparams}.
     \end{tabular}
 \end{table}
 
-
 \section{Results}
+\label{sec:results}
 \subsection{Cumulative Return}
 
 Figure~\ref{fig:cumret_new} compares the mean cumulative return of the PPO agent against an equally-weighted
@@ -505,8 +511,10 @@ inherent challenge of deep reinforcement learning and is discussed further in Se
 \begin{figure}[h!]
     \centering
     \includegraphics[width=0.75\linewidth]{cumulative_return.png}
-    \caption{Mean cumulative return across seeds: raw vs.\ normalized environment,
-             compared against the equally-weighted buy-and-hold benchmark.}
+    \caption{Mean cumulative return of the PPO agent (blue) across 4 seeds,
+compared against the equally-weighted buy-and-hold benchmark (orange) over
+803 trading days. The shaded region represents the standard deviation across
+seeds.}
     \label{fig:cumret_new}
 \end{figure}
 
@@ -529,44 +537,42 @@ Finally, the long training time limited how much hyperparameter tuning we could 
 coefficient $\lambda$, the observation window size $W$, and the learning rate were chosen based on a few initial
 experiments rather than a thorough search. This means that better configurations may exist but were not explored.
 
-
-
 \section{Conclusion}
-In this work, we explored a hybrid approach to portfolio allocation that combines reinforcement learning with
-principled financial optimization. By passing the agent’s decisions through an MPT or PMPT-based optimization layer,
-we ensure that portfolio allocations explicitly account for risk, while still allowing the agent to adapt to changing
-market conditions.
+\label{sec:conclusion}
+This work explored the combination of deep reinforcement learning and principled financial optimization for portfolio
+allocation. By embedding a Mean-Variance or  Mean-Semi-deviation optimization layer directly into the agent's action
+pipeline,we ensure that every allocation decision is by construction risk-aware, while still allowing the agent to adapt
+to changing market conditions through trial and error. The result is a framework that bridges the gap between the static
+discipline of classical financial theory and the flexibility of modern reinforcement learning.
 
-Our results show that this combination can lead to competitive performance compared to a passive benchmark, while
-exhibiting more stable behavior during periods of market stress. In particular, the agent’s ability to limit drawdowns
-highlights the benefit of incorporating downside risk directly into the decision process.
+Over an 803-day out-of-sample test horizon, the PPO agent achieves a mean cumulative return of 84.94\%, compared to
+80.68\% for the equally-weighted buy-and-hold benchmark. Beyond raw returns, the agent demonstrates comparatively more
+stable behavior during periods of market stress, which is consistent with the downside-focused design of the PMPT
+optimizer and the transaction penalty embedded in the reward function. These results suggest that the proposed hybrid
+approach is a promising direction for building portfolio management systems that are both adaptive and financially
+grounded.
 
-At the same time, the variability observed across training runs and the limited hyperparameter exploration suggest that
-these results should be interpreted with caution. The performance of the agent remains sensitive to initialization and
-training conditions, which is a known challenge in deep reinforcement learning.
-
-Future work will focus on improving stability across seeds, exploring more systematic hyperparameter tuning, and testing
-the approach on a broader set of assets and market conditions. Overall, this work shows that combining reinforcement
-learning with simple financial optimization rules is a promising direction for building more robust and risk-aware
-portfolio management systems.
+That said, the sensitivity of the learned policy to random initialization remains a significant limitation, and the lack
+of systematic hyperparameter tuning leaves open the question of how much further the approach can be pushed. Future work
+should focus on improving training stability across seeds, exploring alternative deep reinforcement learning algorithms
+such as SAC or TD3, and extending the framework to incorporate richer market signals or alternative risk objectives such
+as the Black-Litterman model. More broadly, the modular design of the optimization layer makes this framework naturally
+extensible to other sequential decision-making domains beyond finance.
 
 \section{Team Contributions}
 \textbf{Cédric Guévremont} was responsible for the model and learning architecture.
-This includes the design and implementation of the \texttt{CustomCombinedExtractor}
-feature extractor, the PPO agent configuration, and the integration of the
-financial optimization layer, including the Mean-Variance (MPT) and
+This includes the design and implementation of the \texttt{CustomCombinedExtractor} feature extractor, the PPO agent
+configuration, and the integration of the financial optimization layer, including the Mean-Variance (MPT) and
 Mean-Semi-deviation (PMPT) objectives and their constrained optimization via SLSQP.
 
-\textbf{Rima Boujenane} was responsible for the data pipeline and feature
-engineering. This includes the retrieval and preprocessing of historical market
-data via the Yahoo Finance API, the implementation of the incremental CSV caching
-system, and the fractional differentiation procedure, including the per-asset
-selection of the integration order $d_i$ via ADF testing on the training set.
+\textbf{Rima Boujenane} was responsible for the data pipeline and feature engineering. This includes the retrieval and
+preprocessing of historical market data via the Yahoo Finance API, the implementation of the incremental CSV caching
+system, and the fractional differentiation procedure, including the per-asset selection of the integration order $d_i$
+via ADF testing on the training set.
 
-\textbf{Abdel Ghafour Rahmouni} was responsible for the trading environment. This
-includes the design and implementation of the custom \texttt{Gymnasium}-compatible
-environment, the observation and action space definitions, and the reward function
-incorporating portfolio return and transaction penalties.
+\textbf{Abdel Ghafour Rahmouni} was responsible for the trading environment. This includes the design and implementation
+of the custom \texttt{Gymnasium}-compatible environment, the observation and action space definitions, and the reward
+function incorporating portfolio return and transaction penalties.
 
 \newpage
 

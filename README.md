@@ -127,6 +127,7 @@ pkill -u $USER
     │   ├── __init__.py
     │   ├── data.py
     │   ├── env.py
+    │   ├── feature_engineering.py
     │   ├── main.py
     │   ├── model.py
     │   ├── portfolio_optimizer.py

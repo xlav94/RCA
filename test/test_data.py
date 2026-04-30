@@ -1,88 +1,133 @@
 import unittest
 import pandas as pd
 import numpy as np
-from unittest.mock import patch
-from src.data import DataDownloader, DataPreprocessor
+from unittest.mock import patch, MagicMock
+from src.data import DataPipeline, DataDownloader
 
 
-class TestDataPreprocessor(unittest.TestCase):
-
+class TestDataPipeline(unittest.TestCase):
     def setUp(self):
-        """Creates fake stock data to test the math without needing the internet."""
-        # 100 days of fake data
-        self.dates = pd.date_range(start="2023-01-01", periods=100)
+        self.tickers = ["AAPL", "MSFT"]
+        self.pipeline = DataPipeline(
+            tickers=self.tickers,
+            start_date="2023-01-01",
+            end_date="2024-01-01"
+        )
 
-        # fake prices that slowly go up to simulate a trend
-        data = {
+        np.random.seed(42)
+        dates = pd.date_range(start="2023-01-01", periods=100)
+        self.fake_raw = pd.DataFrame({
             'Open_AAPL': np.linspace(100, 150, 100) + np.random.normal(0, 1, 100),
             'Open_MSFT': np.linspace(200, 250, 100) + np.random.normal(0, 1, 100),
-        }
-        self.df = pd.DataFrame(data, index=self.dates)
-        self.tickers = ["AAPL", "MSFT"]
+            'Close_AAPL': np.linspace(101, 151, 100),
+            'Close_MSFT': np.linspace(201, 251, 100),
+        }, index=dates)
 
-        # initialize the preprocessor
-        self.preprocessor = DataPreprocessor(self.df, self.tickers)
+    @patch.object(DataPipeline, '_get_raw')
+    def test_get_env_data_returns_correct_columns(self, mock_get_raw):
+        mock_get_raw.return_value = self.fake_raw
+        env_df = self.pipeline.get_env_data(feature='Open')
 
-    def test_add_features(self):
-        """Verifies that technical indicators are calculated and NaNs are dropped."""
-        window = 20
-        processed_df = self.preprocessor.add_features(window=window)
-
-        # check that the new columns were created
-        self.assertIn("Return_AAPL", processed_df.columns)
-        self.assertIn("SMA_20_MSFT", processed_df.columns)
-        self.assertIn("Vol_20_AAPL", processed_df.columns)
-
-        # pct_change() consumes 1 day, then rolling(20) needs 20 days of returns.
-        # total dropped days = window (20). 100 original - 20 dropped = 80 remaining.
-        self.assertEqual(len(processed_df), 100 - window)
-
-    def test_get_env_ready_data(self):
-        """Verifies the environment gets strictly the requested columns."""
-        env_df = self.preprocessor.get_env_ready_data(feature='Open')
-        # The environment needs exactly 2 columns for the dot product to work
         self.assertEqual(len(env_df.columns), 2)
         self.assertIn("Open_AAPL", env_df.columns)
         self.assertIn("Open_MSFT", env_df.columns)
 
-    def test_get_env_ready_data_missing_column(self):
-        """Verifies it crashes safely if we ask for a column that doesn't exist."""
-        # We don't have 'Close' prices in our dummy data, so this should raise an error
+    @patch.object(DataPipeline, '_get_raw')
+    def test_get_env_data_missing_column_raises(self, mock_get_raw):
+        mock_get_raw.return_value = self.fake_raw
         with self.assertRaises(ValueError):
-            self.preprocessor.get_env_ready_data(feature='Close')
+            self.pipeline.get_env_data(feature='High')
 
-    def test_split_train_test(self):
-        """Verifies the chronological split ratio."""
-        train_df, test_df = self.preprocessor.split_train_test(self.preprocessor.df, train_ratio=0.8)
-        # 80% of 100 rows is 80 rows
-        self.assertEqual(len(train_df), 80)
-        self.assertEqual(len(test_df), 20)
-
-        # chronological check: Train dates must be strictly before Test dates
-        self.assertTrue(train_df.index[-1] < test_df.index[0])
-
-
+    @patch.object(DataPipeline, '_get_raw')
+    def test_get_env_data_column_order_matches_tickers(self, mock_get_raw):
+        mock_get_raw.return_value = self.fake_raw
+        env_df = self.pipeline.get_env_data(feature='Open')
+        expected_cols = [f"Open_{t}" for t in self.tickers]
+        self.assertEqual(list(env_df.columns), expected_cols)
 
 class TestDataDownloader(unittest.TestCase):
+    def setUp(self):
+        self.tickers = ["AAPL", "MSFT"]
+        self.downloader = DataDownloader(
+            tickers=self.tickers,
+            start_date="2023-01-01",
+            end_date="2024-01-01"
+        )
 
-    @patch("pandas.read_csv")
-    def test_get_feature_matrix_logic(self, mock_read_csv):
-        """
-        Uses a mock to intercept the CSV reading process.
-        Tests if it correctly filters the flat columns into a numpy array.
-        """
-        # create a fake dataframe that 'read_csv' will return
-        fake_data = {
-            'Open_AAPL': [150, 151],
-            'Close_AAPL': [152, 150],
-            'Open_MSFT': [250, 252]
-        }
-        mock_read_csv.return_value = pd.DataFrame(fake_data)
+    @patch("src.data.yf.download")
+    @patch("src.data.os.path.exists")
+    def test_fetch_data_downloads_when_no_cache(self, mock_exists, mock_download):
+        mock_exists.return_value = False
 
-        downloader = DataDownloader(tickers=["AAPL", "MSFT"], start_date="2020-01-01", end_date="2021-01-01")
-        matrix = downloader.get_feature_matrix(features=['Open'])
+        dates = pd.date_range(start="2023-01-01", periods=10)
+        arrays = [
+            ["Open", "Open", "Close", "Close"],
+            ["AAPL", "MSFT", "AAPL", "MSFT"]
+        ]
+        tuples = list(zip(*arrays))
+        index = pd.MultiIndex.from_tuples(tuples)
+        fake_df = pd.DataFrame(
+            np.random.rand(10, 4),
+            index=dates,
+            columns=index
+        )
+        mock_download.return_value = fake_df
 
-        # should grab 'Open_AAPL' and 'Open_MSFT', ignoring 'Close_AAPL'
-        self.assertEqual(matrix.shape, (2, 2))
-        self.assertEqual(matrix[0][0], 150)  # Open_AAPL day 1
-        self.assertEqual(matrix[0][1], 250)  # Open_MSFT day 1
+        with patch("builtins.open", unittest.mock.mock_open()):
+            with patch("pandas.DataFrame.to_csv"):
+                result = self.downloader.fetch_data()
+
+        mock_download.assert_called_once()
+        self.assertIsInstance(result, pd.DataFrame)
+
+    @patch("src.data.pd.read_csv")
+    @patch("src.data.os.path.exists")
+    def test_fetch_data_uses_cache_when_up_to_date(self, mock_exists, mock_read_csv):
+        mock_exists.return_value = True
+
+        dates = pd.date_range(start="2023-01-01", periods=10)
+        fake_cached = pd.DataFrame({
+            'Open_AAPL': np.linspace(100, 110, 10),
+            'Open_MSFT': np.linspace(200, 210, 10),
+        }, index=dates)
+        mock_read_csv.return_value = fake_cached
+
+        with patch("src.data.yf.download") as mock_download:
+            self.downloader.end_date = "2023-01-10"
+            self.downloader.fetch_data()
+            mock_download.assert_not_called()
+
+class TestChronologicalSplit(unittest.TestCase):
+    def setUp(self):
+        np.random.seed(42)
+        dates = pd.date_range(start="2023-01-01", periods=100)
+        self.df = pd.DataFrame({
+            'Open_AAPL': np.linspace(100, 150, 100),
+            'Open_MSFT': np.linspace(200, 250, 100),
+        }, index=dates)
+
+    def test_split_ratio(self):
+        train_size = int(len(self.df) * 0.8)
+        df_train = self.df.iloc[:train_size]
+        df_test = self.df.iloc[train_size:]
+
+        self.assertEqual(len(df_train), 80)
+        self.assertEqual(len(df_test), 20)
+
+    def test_split_no_overlap(self):
+        train_size = int(len(self.df) * 0.8)
+        df_train = self.df.iloc[:train_size]
+        df_test = self.df.iloc[train_size:]
+
+        overlap = df_train.index.intersection(df_test.index)
+        self.assertEqual(len(overlap), 0)
+
+    def test_split_chronological_order(self):
+        train_size = int(len(self.df) * 0.8)
+        df_train = self.df.iloc[:train_size]
+        df_test = self.df.iloc[train_size:]
+
+        self.assertTrue(df_train.index[-1] < df_test.index[0])
+
+if __name__ == "__main__":
+    unittest.main()

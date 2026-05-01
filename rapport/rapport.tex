@@ -525,7 +525,7 @@ Figure~\ref{fig:cumret_new} compares the mean cumulative return of the PPO agent
 buy-and-hold benchmark over the 803-day test horizon. The shaded region around the PPO curve represents the standard
 deviation across the 4 evaluation seeds, reflecting the variance of the learned policy under different random initializations.
 
-The PPO agent achieves a mean cumulative return of 84.94\% over the test horizon, compared to 80.68\% for the
+The PPO agent achieves a mean cumulative return of \textbf{84.94\%} over the test horizon, compared to \textbf{80.68\%} for the
 equally-weighted buy-and-hold benchmark.
 
 The variance across seeds, visible in the shaded region, is nonetheless  non-negligible, particularly in the second
@@ -540,6 +540,28 @@ compared against the equally-weighted buy-and-hold benchmark over
 803 trading days.}
     \label{fig:cumret_new}
 \end{figure}
+
+\subsection{Return per Unit of Risk: Sharpe Ratio}
+The Sharpe Ratio, defined as the mean return divided by the standard deviation of returns, measures how much return an
+investor receives for each unit of risk taken. A higher Sharpe ratio indicates a more efficient use of risk. Unlike
+cumulative return, which only captures the total gain over the period, the Sharpe ratio accounts for how smoothly and
+consistently those gains were achieved, making it a more complete picture of portfolio performance.
+
+The PPO agent achieves a mean Sharpe ratio of \textbf{1.716} across the 4 evaluation seeds, compared to \textbf{1.601}
+for the equally-weighted buy-and-hold benchmark, suggesting that the agent generates competitive returns with a more
+favorable return-to-risk profile than passive allocation.
+
+\subsection{Downside Risk-Adjusted Performance: Sortino Ratio}
+The Sortino ratio is a refinement of the Sharpe ratio that distinguishes between harmful and neutral volatility. Rather
+than dividing by the standard deviation of all returns, it divides only by the standard deviation of negative returns,
+that is, it only penalizes downside fluctuations. This makes it particularly well-suited for evaluating strategies that
+explicitly target downside risk control, such as the PMPT-based approach proposed in this work. A higher Sortino
+ratio indicates that the portfolio generates strong returns while keeping losses limited and contained.
+
+The PPO agent achieves a mean Sortino ratio of \textbf{2.604} across the 4 evaluation seeds, compared to \textbf{2.429}
+for the equally-weighted buy-and-hold benchmark. Notably, the gap between the agent and the benchmark is wider here than
+for the Sharpe ratio, suggesting that the agent is particularly effective at limiting downside losses, a result that directly
+reflects the influence of the PMPT optimization layer, which is specifically designed to penalize negative portfolio returns.
 
 \section{Limitations}
 \label{sec:limitations}
@@ -590,8 +612,6 @@ the final presentation. While the following describes the primary technical resp
 boundaries between these roles were fluid in practice, with each member contributing ideas, feedback, and effort beyond
 their designated area.
 
-The source code for this project is available at \url{https://github.com/xlav94/RCA}, under the \texttt{main} branch.
-
 \textbf{Cédric Guévremont} was responsible for the model and learning architecture.
 This includes the design and implementation of the \texttt{CustomCombinedExtractor} feature extractor, the PPO agent
 configuration, and the integration of the financial optimization layer, including the Mean-Variance (MPT) and
@@ -608,6 +628,8 @@ of the custom \texttt{Gymnasium}-compatible environment, the observation and act
 function incorporating portfolio return and transaction penalties. He also developed the visualization of the experimental
 results, including the cumulative return plots.
 
+\section{Source Code}
+The source code for this project is available at \url{https://github.com/xlav94/RCA}, under the \texttt{main} branch.
 
 
 

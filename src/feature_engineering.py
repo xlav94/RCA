@@ -19,7 +19,7 @@ def find_optimal_d(series: np.ndarray, train_end: int,
     on the training portion only (ADF test at 95% confidence).
     Fitting on train only prevents data leakage into test.
     """
-    train_series = np.log(series[:train_end] + 1e-8)
+    train_series = series[:train_end]
 
     for d in d_range:
         weights  = _build_weights(d, window)
@@ -94,7 +94,7 @@ def plot_fracdiff_diagnostic(df: pd.DataFrame, ticker: str,
     3. Original log price vs fracdiff at optimal d
     """
     col          = f"Open_{ticker}"
-    series       = np.log(df[col].values.astype(float) + 1e-8)
+    series       = df[col].values.astype(float)
     train_end    = int(len(series) * train_ratio)
     train_series = series[:train_end]
 
@@ -143,11 +143,10 @@ def plot_fracdiff_diagnostic(df: pd.DataFrame, ticker: str,
         full_convolved = apply_fracdiff(series, optimal_d, window)
         ax3       = axes[1]
         ax3_right = ax3.twinx()
-        ax3.plot(series, color='black', label='Log price (original)', alpha=0.7)
         ax3_right.plot(full_convolved, color='gray', label=f'FracDiff (d={optimal_d})', alpha=0.7)
         ax3.set_xlabel('Time')
-        ax3.set_ylabel('Log Price', color='black')
-        ax3_right.set_ylabel('FracDiff Value', color='gray')
+        ax3.set_ylabel('Price', color='black')
+        ax3.plot(series, color='black', label='Price (original)', alpha=0.7)
         ax3.set_title(f'Original vs FracDiff at d={optimal_d}')
         ax3.legend(loc='upper left')
         ax3_right.legend(loc='lower right')

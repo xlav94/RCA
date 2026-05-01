@@ -216,6 +216,17 @@ Both the FinRL framework \citep{liu2020finrl} and the ensemble strategy proposed
 market frictions such as transaction costs and financial turbulence indices. These mechanisms penalize excessive
 speculation and enable agents to survive extreme market conditions, including financial crashes.
 
+\subsection{Summary and Research Gap}
+Taken together, the literature reveals a consistent tension: classical financial methods (MPT, PMPT) offer principled
+risk control but are static, while RL-based approaches are adaptive but treat risk only implicitly through reward shaping.
+Existing hybrid approaches \citep{jang2023deep, liu2020finrl} partially bridge this gap but embed financial constraints
+loosely, through regularization terms rather than hard architectural constraints. Furthermore, the stationarity-memory
+tradeoff in financial time series remains underexplored in RL contexts, with most methods using simple log-returns. Our
+work addresses these gaps simultaneously: we enforce risk constraints structurally through an optimization layer (MPT or
+PMPT) placed between the agent's output and the environment, and we use fractional differentiation to preserve
+long-range memory while ensuring stationarity, a combination not previously explored in the RL portfolio management
+literature.
+
 \section{Methods}
 \label{sec:methods}
 This section describes the main components of the proposed system: the environment and data pipeline, the feature
@@ -311,7 +322,7 @@ to require stronger transformations, reflecting their more persistent upward tre
 \label{sec:architecture}
 A key challenge in this work is that the agent must simultaneously process two fundamentally different types of
 input: a sequence of past market prices and the current portfolio allocation, and then produce decisions that are
-guided by both the data and financial considerations. To address this, we build a architecture with three main parts:
+guided by both the data and financial considerations. To address this, we build an architecture with three main parts:
 a dual-stream feature extractor, a PPO actor-critic policy network, and a financial optimization layer that converts
 the agent’s output into valid portfolio allocations. Figure~\ref{fig:architecture} illustrates the full pipeline.
 
@@ -519,8 +530,20 @@ reported in Table~\ref{tab:hyperparams}.
 
 \section{Results}
 \label{sec:results}
-\subsection{Cumulative Return}
 
+\subsection{On the Choice of Financial Optimizer}
+Although the proposed architecture supports both MPT and PMPT optimization layers, the results reported in this work
+are based only on PMPT. MPT was implemented and tested in early experiments, but PMPT was ultimately preferred because
+it focuses specifically on downside risk, penalizing losses rather than overall variability.
+
+This choice is consistent with the objective of this project, which is to build allocation strategies that are robust
+to negative market movements rather than simply minimizing volatility. It also aligns naturally with the evaluation
+metric used in this work, the Sortino ratio, which measures performance relative to downside risk as discussed in
+Section~\ref{sec:sortino}. As a result, the optimization objective, the reward function, and the evaluation metric all
+rely on the same definition of risk, making the overall framework more consistent.
+
+
+\subsection{Cumulative Return}
 Figure~\ref{fig:cumret_new} compares the mean cumulative return of the PPO agent against an equally-weighted
 buy-and-hold benchmark over the 803-day test horizon. The shaded region around the PPO curve represents the standard
 deviation across the 4 evaluation seeds, reflecting the variance of the learned policy under different random initializations.
@@ -546,17 +569,37 @@ The Sharpe Ratio, defined as the mean return divided by the standard deviation o
 investor receives for each unit of risk taken. A higher Sharpe ratio indicates a more efficient use of risk. Unlike
 cumulative return, which only captures the total gain over the period, the Sharpe ratio accounts for how smoothly and
 consistently those gains were achieved, making it a more complete picture of portfolio performance.
+Formally, it is defined as:
+
+\begin{equation}
+    \text{Sharpe} = \frac{\mathbb{E}[R_p - R_f]}{\sigma_p}
+\end{equation}
+
+where $R_p$ is the portfolio return, $R_f$ is the risk-free rate, and $\sigma_p$ is the standard deviation of portfolio returns.
 
 The PPO agent achieves a mean Sharpe ratio of \textbf{1.716} across the 4 evaluation seeds, compared to \textbf{1.601}
 for the equally-weighted buy-and-hold benchmark, suggesting that the agent generates competitive returns with a more
 favorable return-to-risk profile than passive allocation.
 
 \subsection{Downside Risk-Adjusted Performance: Sortino Ratio}
+\label{sec:sortino}
 The Sortino ratio is a refinement of the Sharpe ratio that distinguishes between harmful and neutral volatility. Rather
-than dividing by the standard deviation of all returns, it divides only by the standard deviation of negative returns,
-that is, it only penalizes downside fluctuations. This makes it particularly well-suited for evaluating strategies that
-explicitly target downside risk control, such as the PMPT-based approach proposed in this work. A higher Sortino
-ratio indicates that the portfolio generates strong returns while keeping losses limited and contained.
+than dividing by the standard deviation of all returns, it divides only by the downside deviation, the square root
+of the mean squared deviation of returns that fall below a target threshold, penalizing only downside fluctuations.
+This makes it particularly well-suited for evaluating strategies that explicitly target downside risk control, such as
+the PMPT-based approach proposed in this work. A higher Sortino ratio indicates that the portfolio generates strong
+returns while keeping losses limited and contained.
+Formally:
+
+\begin{equation}
+    \text{Sortino} = \frac{\mathbb{E}[R_p - R_f]}{\sigma_d}
+\end{equation}
+
+where $\sigma_d$ is the downside semi-deviation, defined as:
+
+\begin{equation}
+    \sigma_d = \sqrt{\frac{1}{T}\sum_{t=1}^{T} \min(0,\, R_{p,t} - R_f)^2}
+\end{equation}
 
 The PPO agent achieves a mean Sortino ratio of \textbf{2.604} across the 4 evaluation seeds, compared to \textbf{2.429}
 for the equally-weighted buy-and-hold benchmark. Notably, the gap between the agent and the benchmark is wider here than
@@ -630,29 +673,6 @@ results, including the cumulative return plots.
 
 \section{Source Code}
 The source code for this project is available at \url{https://github.com/xlav94/RCA}, under the \texttt{main} branch.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 \newpage
 

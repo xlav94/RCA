@@ -246,6 +246,7 @@ def test(algo, model_path, env_path, seed: int):
         writer.add_scalar("Performance/Daily_return", info["portfolio_return"], step)
         writer.add_scalar("Performance/Transaction_penality", info["transaction_penality"], step)
         weights_dict = {stocks[i]: float(info["portfolio_weights"][i]) for i in range(len(stocks))}
+        weights_dict["Cash"] = float(info["portfolio_weights"][-1])
         writer.add_scalars("Allocation/Portfolio_Weights", weights_dict, step)
 
         step += 1
@@ -263,6 +264,6 @@ if __name__ == "__main__":
         train(algo_type, train_seed=train_seed)
     else:
         env = 'models/PPO_seed_42_env.pkl'
-        model = 'models/ppo_agent_10000000_seed_42_2026-05-01-19-38.zip'
+        model = 'models/ppo_agent_10000000_seed_42_2026-05-02-02-40.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)

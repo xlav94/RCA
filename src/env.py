@@ -16,13 +16,14 @@ class CustomEnv(gym.Env):
         self.window_size = window_size
         self.initial_balance = float(initial_balance)
         self.env_name = env_name
-        self.num_assets = len(stocks) + 1  # +1 for cash
+        self.num_stocks = len(stocks)
+        self.num_assets = self.num_stocks + 1  # +1 for cash
         self.weights = np.full(self.num_assets, 1 / self.num_assets)
         self.po = PortfolioOptimizer(lower_bound=0., upper_bound=0.10)
 
         self.action_space = spaces.Box(low=-1.0,
                                      high=1.0,
-                                     shape=(self.num_assets,),
+                                     shape=(self.num_stocks,),
                                     dtype=np.float32)
 
         num_extra = len(df_features.columns) if df_features is not None else 0
@@ -31,7 +32,7 @@ class CustomEnv(gym.Env):
         self.observation_space = spaces.Dict({
             "market_history": spaces.Box(
                 low=-np.inf, high=np.inf,
-                shape=(window_size, len(df.columns) + num_extra),  # ← only change
+                shape=(window_size, len(df.columns) + num_extra),
                 dtype=np.float32
             ),
             "portfolio_state": spaces.Box(
@@ -65,7 +66,7 @@ class CustomEnv(gym.Env):
     def step(self, action : np.ndarray):
         portfolio_weights = self._get_weights_from_action_mpt(action)
         portfolio_return, transaction_penality, downside_penalty, log_returns, daily_cash_return = self._calculate_reward(portfolio_weights)
-        reward = portfolio_return - daily_cash_return - transaction_penality
+        reward = portfolio_return - 0.5 * downside_penalty - transaction_penality
         self.current_step += 1
         self.weights = portfolio_weights
 
@@ -90,6 +91,8 @@ class CustomEnv(gym.Env):
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.pct_change().dropna()
             mu = action * 0.01
+            true_daily_cash_return = (1 + 0.05) ** (1 / 252) - 1
+            mu = np.append(mu, true_daily_cash_return)
             num_assets = self.num_assets
             initial_weights = np.full(num_assets, 1 / num_assets)
             weights = None

@@ -66,7 +66,7 @@ class CustomEnv(gym.Env):
     def step(self, action : np.ndarray):
         portfolio_weights = self._get_weights_from_action_mpt(action)
         portfolio_return, transaction_penality, downside_penalty, log_returns, daily_cash_return = self._calculate_reward(portfolio_weights)
-        reward = portfolio_return - 0.5 * downside_penalty - transaction_penality
+        reward = portfolio_return - daily_cash_return
         self.current_step += 1
         self.weights = portfolio_weights
 
@@ -93,6 +93,7 @@ class CustomEnv(gym.Env):
             mu = action * 0.01
             true_daily_cash_return = (1 + 0.05) ** (1 / 252) - 1
             mu = np.append(mu, true_daily_cash_return)
+            print(mu)
             num_assets = self.num_assets
             initial_weights = np.full(num_assets, 1 / num_assets)
             weights = None

@@ -18,7 +18,7 @@ def objective_mpt_jax(weights, mu, returns, cov_matrix, l=2.0):
 #####################################
 
 @jit
-def objective_pmpt_jax(weights, mu, returns, cov_matrix, l=1.0, epsilon=1e-5):
+def objective_pmpt_jax(weights, mu, returns, cov_matrix, l=0.1, epsilon=1e-5):
     port_return = jnp.dot(weights, mu)
     historical_port_return = jnp.dot(returns, weights)
     downside_risk = jnp.sqrt(jnp.mean(jnp.minimum(0, historical_port_return) ** 2) + epsilon)

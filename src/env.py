@@ -90,7 +90,7 @@ class CustomEnv(gym.Env):
 
             stock_actions = action[:-1]
             cash_action = action[-1]
-            cash_weight = (cash_action + 1.0) / 2.0
+            cash_weight = ((cash_action + 1.0) / 2.0) * 0.5
 
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.iloc[:, :-1].pct_change().dropna()

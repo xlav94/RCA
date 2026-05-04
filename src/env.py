@@ -65,8 +65,8 @@ class CustomEnv(gym.Env):
 
     def step(self, action : np.ndarray):
         portfolio_weights = self._get_weights_from_action_mpt(action)
-        portfolio_return, transaction_penality, downside_penalty, log_returns, daily_cash_return = self._calculate_reward(portfolio_weights)
-        reward = portfolio_return - daily_cash_return
+        portfolio_return, transaction_penality, downside_penalty, log_returns, daily_cash_return, daily_market_return = self._calculate_reward(portfolio_weights)
+        reward = portfolio_return - daily_market_return
         self.current_step += 1
         self.weights = portfolio_weights
 
@@ -90,7 +90,7 @@ class CustomEnv(gym.Env):
 
             stock_actions = action[:-1]
             cash_action = action[-1]
-            cash_weight = ((cash_action + 1.0) / 2.0) * 0.5
+            cash_weight = ((cash_action + 1.0) / 2.0) * 0.3
 
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
             returns = prices.iloc[:, :-1].pct_change().dropna()
@@ -135,6 +135,10 @@ class CustomEnv(gym.Env):
         portfolio_return = np.dot(portfolio_weights, assets_returns)
         downside_penalty = abs(min(0, portfolio_return))
         daily_cash_return = assets_returns[-1]
+        current_prices = self.df.iloc[self.current_step].values
+        previous_prices = self.df.iloc[self.current_step - 1].values
+        assets_returns = (current_prices - previous_prices) / previous_prices
+        daily_market_return = np.mean(assets_returns[:-1])
 
         # Penalite si changement de poids important (pour encourager la stabilité du portefeuille)
         if self.current_step == self.window_size:
@@ -142,7 +146,7 @@ class CustomEnv(gym.Env):
         else:
             weight_change = np.sum(np.abs(portfolio_weights - self.weights)) #L1 norm
             transaction_penality = weight_change * penality_factor
-        return portfolio_return, transaction_penality, downside_penalty, log_returns, daily_cash_return
+        return portfolio_return, transaction_penality, downside_penalty, log_returns, daily_cash_return, daily_market_return
 
     def render(self):
         return

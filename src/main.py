@@ -264,6 +264,6 @@ if __name__ == "__main__":
         train(algo_type, train_seed=train_seed)
     else:
         env = 'models/PPO_seed_42_env.pkl'
-        model = 'models/ppo_agent_10000000_seed_42_2026-05-04-06-27.zip'
+        model = 'models/ppo_agent_10000000_seed_42_2026-05-04-19-10.zip'
         seed_everything(test_seed)
         test(algo_type, model, env, test_seed)

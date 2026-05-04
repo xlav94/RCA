@@ -19,11 +19,11 @@ class CustomEnv(gym.Env):
         self.num_stocks = len(stocks)
         self.num_assets = self.num_stocks + 1  # +1 for cash
         self.weights = np.full(self.num_assets, 1 / self.num_assets)
-        self.po = PortfolioOptimizer(lower_bound=0., upper_bound=0.10)
+        self.po = PortfolioOptimizer(lower_bound=0., upper_bound=0.30)
 
         self.action_space = spaces.Box(low=-1.0,
                                      high=1.0,
-                                     shape=(self.num_stocks,),
+                                     shape=(self.num_assets,),
                                     dtype=np.float32)
 
         num_extra = len(df_features.columns) if df_features is not None else 0
@@ -88,33 +88,37 @@ class CustomEnv(gym.Env):
             if np.any(np.isnan(action)):
                 raise ValueError("Action contient des NaN")
 
+            stock_actions = action[:-1]
+            cash_action = action[-1]
+            cash_weight = (cash_action + 1.0) / 2.0
+
             prices = self.df.iloc[self.current_step - self.window_size: self.current_step]
-            returns = prices.pct_change().dropna()
-            mu = action * 0.1
-            true_daily_cash_return = (1 + 0.05) ** (1 / 252) - 1
-            mu = np.append(mu, true_daily_cash_return)
-            num_assets = self.num_assets
+            returns = prices.iloc[:, :-1].pct_change().dropna()
+            mu = stock_actions * 0.01
+            num_assets = self.num_stocks
             initial_weights = np.full(num_assets, 1 / num_assets)
-            weights = None
+            stocks_weights = None
 
             if self.objective == "MPT":
-                weights = self.po.minimize(objective_mpt_jax,
+                stocks_weights = self.po.minimize(objective_mpt_jax,
                                            initial_weights,
                                            mu,
                                            returns)
             elif self.objective == "PMPT":
-                weights = self.po.minimize(objective_pmpt_jax,
+                stocks_weights = self.po.minimize(objective_pmpt_jax,
                                       initial_weights,
                                       mu,
                                       returns)
 
             elif self.objective == "SOFTMAX":
-                weights = softmax(action)
+                stocks_weights = softmax(action)
 
             """weights = np.round(weights, decimals=precision)
             diff = 1.0 - np.sum(weights)
             weights[weights.argmax()] += diff"""
 
+            final_stock_weights = (1 - cash_weight) * stocks_weights
+            weights = np.append(final_stock_weights, cash_weight)
         except Exception as e:
             print(f"Error in MPT optimization: {e}")
             weights = np.full(self.num_assets, 1 / self.num_assets)

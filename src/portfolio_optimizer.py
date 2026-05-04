@@ -18,7 +18,7 @@ def objective_mpt_jax(weights, mu, returns, cov_matrix, l=2.0):
 #####################################
 
 @jit
-def objective_pmpt_jax(weights, mu, returns, cov_matrix, l=0, epsilon=1e-5):
+def objective_pmpt_jax(weights, mu, returns, cov_matrix, l=1., epsilon=1e-5):
     port_return = jnp.dot(weights, mu)
     historical_port_return = jnp.dot(returns, weights)
     downside_risk = jnp.sqrt(jnp.mean(jnp.minimum(0, historical_port_return) ** 2) + epsilon)
@@ -61,7 +61,7 @@ class PortfolioOptimizer:
         num_assets = len(mu_jax)
         lower_bounds_arr = jnp.full(num_assets, self.lower_bound)
         upper_bounds_arr = jnp.full(num_assets, self.upper_bound)
-        upper_bounds_arr = upper_bounds_arr.at[-1].set(1.0)
+        #upper_bounds_arr = upper_bounds_arr.at[-1].set(1.0)
         weights = minimize_jax(objective, initial_weights_jax, mu_jax, returns_jax,
                                 cov_matrix_jax,
                                 lower_bounds_arr, upper_bounds_arr)
